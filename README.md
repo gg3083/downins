@@ -29,7 +29,7 @@ java -jar /path/to/jar s threadNum=1
 
 |  键名称  | 说明   |    
 |  -  |  -  |
-|  threadName  | 下载线程数   | 
+|  threadNum  | 下载线程数   | 
 |  location  | 下载文件存储文件夹位置   |    
 |  proxyAddr  | 代理地址   |    
 | proxyPort   | 代理端口   |   
