@@ -169,7 +169,7 @@ public class Jsons {
 		 * @return
 		 */
 		public boolean isNull() {
-			return ele == JsonNull.INSTANCE;
+			return ele == JsonNull.INSTANCE || (ele.isJsonArray() && ele.getAsJsonArray().size() == 0);
 		}
 
 		public Throwable getEx() {

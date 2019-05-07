@@ -36,14 +36,18 @@ public class Https {
 	public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36";
 
 	public static String toString(CloseableHttpClient client, HttpRequestBase req) throws IOException {
+		return toString(client, req, 30);
+	}
+
+	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec) throws IOException {
 		try (CloseableHttpResponse response = client.execute(req)) {
 			int statusCode = response.getStatusLine().getStatusCode();
 			if (statusCode != 200) {
 				if (statusCode == 429) {
 					try {
-						System.out.println("服务:" + req.getURI() + "请求失败：客户端请求太多，10s后再次尝试");
-						Thread.sleep(10 * 1000);
-						return toString(client, req);
+						System.out.println("服务:" + req.getURI() + "请求失败：客户端请求太多，" + sec + "s后再次尝试");
+						Thread.sleep(sec * 1000);
+						return toString(client, req, sec + 30);
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
 						throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode);

@@ -27,20 +27,29 @@ public class Downloader {
 
 	public static void main(String[] args) throws Exception {
 		String type = args[0];
-		if (!type.equalsIgnoreCase("u") && !type.equalsIgnoreCase("p")) {
+		if (!type.equalsIgnoreCase("u") && !type.equalsIgnoreCase("p") && !type.equalsIgnoreCase("t")) {
 
 			if (type.equalsIgnoreCase("s")) {
 				processSetting(args);
 				return;
 			}
-			prtError("无效的类型，只支持用户|帖子的下载");
+			prtError("无效的类型，只支持用户|帖子|标签的下载");
 		}
 		if (args.length < 2) {
 			prtError("无效的参数");
 		}
 		String url = args[1];
-		Optional<String> opsign = InsParser.parse(url);
-		if (!opsign.isPresent()) {
+		Optional<String> opsign = null;
+		if (type.equalsIgnoreCase("u")) {
+			opsign = InsParser.getUsername(url);
+		}
+		if (type.equalsIgnoreCase("p")) {
+			opsign = InsParser.getShortcode(url);
+		}
+		if (type.equalsIgnoreCase("t")) {
+			opsign = InsParser.getTag(url);
+		}
+		if (opsign == null || !opsign.isPresent()) {
 			prtError("无法解析的地址或标识");
 		}
 
@@ -60,6 +69,17 @@ public class Downloader {
 				}
 			} else {
 				new DownloadU(sign, dir, Integer.MAX_VALUE).start();
+			}
+		}
+		if ("t".equalsIgnoreCase(type)) {
+			if (args.length == 3) {
+				try {
+					new DownloadT(sign, dir, Integer.parseInt(args[2])).start();
+				} catch (NumberFormatException e) {
+					System.out.println("文件夹内最大文件数目必须为一个数字");
+				}
+			} else {
+				new DownloadT(sign, dir, Integer.MAX_VALUE).start();
 			}
 		}
 		long end = System.currentTimeMillis();

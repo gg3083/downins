@@ -8,6 +8,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,22 +22,28 @@ import java.util.stream.Stream;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 
-import me.qyh.downinsrun.InsParser.PostInfo;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import me.qyh.downinsrun.InsParser.PagingItem;
+import me.qyh.downinsrun.InsParser.TagPagingResult;
+import me.qyh.downinsrun.InsParser.TagParser;
 import me.qyh.downinsrun.InsParser.Url;
-import me.qyh.downinsrun.InsParser.UserPagingResult;
-import me.qyh.downinsrun.InsParser.UserParser;
+import me.qyh.downinsrun.Jsons.ExpressionExecutor;
+import me.qyh.downinsrun.Jsons.ExpressionExecutors;
 
 /**
- * 用户所有帖子下载
+ * 标签下载
  * 
  * @author wwwqyhme
  *
  */
-class DownloadU {
+class DownloadT {
 
-	private final String user;
+	private final String tag;
 	private final Path root;
 	private final Path errorF;
+	private final Path errorP;
 	private final Path posts;
 	private final Set<String> postSet = new HashSet<>();
 	private final Set<String> increasePostSet = new HashSet<>();
@@ -56,10 +63,10 @@ class DownloadU {
 	private volatile boolean downloaded;
 	private ExecutorService moveExecutor;
 
-	public DownloadU(String user, Path dir, Integer maxInDir) {
+	public DownloadT(String tag, Path dir, Integer maxInDir) {
 		super();
-		this.user = user;
-		this.root = dir.resolve(user);
+		this.tag = tag;
+		this.root = dir.resolve(tag);
 		this.maxInDir = maxInDir;
 		if (maxInDir < 1) {
 			System.out.println("文件夹内存放文件最大数目不能小于1");
@@ -135,6 +142,15 @@ class DownloadU {
 			}
 		}
 
+		this.errorP = root.resolve("error_p.json");
+		if (!Files.exists(errorP)) {
+			try {
+				Files.createFile(errorP);
+			} catch (Throwable e) {
+				System.out.println("创建文件:" + errorP + "失败");
+				System.exit(-1);
+			}
+		}
 		destDir = root;
 	}
 
@@ -143,6 +159,9 @@ class DownloadU {
 			moveExecutor = Executors.newSingleThreadExecutor();
 			moveExecutor.execute(new DirFilesMoveMonitor(destDir));
 		}
+
+		// 下载失败帖子
+		downloadError();
 		// 下载失败文件
 		DownloadF.downloadError(parser, client, errorF, tempDir);
 		execute("");
@@ -151,7 +170,7 @@ class DownloadU {
 		try {
 			es2.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
 		} catch (InterruptedException e) {
-			System.out.println("下载用户" + user + "帖子失败");
+			System.out.println("下载标签" + tag + "帖子失败");
 			System.exit(-1);
 		}
 
@@ -159,16 +178,24 @@ class DownloadU {
 		try {
 			es.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
 		} catch (InterruptedException e) {
-			System.out.println("下载用户" + user + "帖子失败");
+			System.out.println("下载标签" + tag + "帖子失败");
 			System.exit(-1);
 		}
-
+		downloadError();
 		DownloadF.downloadError(parser, client, errorF, tempDir);
 
 		try {
 			String errorFContent = new String(Files.readAllBytes(errorF));
 			if (errorFContent.isEmpty() || errorFContent.equals("[]")) {
 				Files.delete(errorF);
+			}
+		} catch (Throwable e) {
+		}
+
+		try {
+			String errorPContent = new String(Files.readAllBytes(errorP));
+			if (errorPContent.isEmpty() || errorPContent.equals("[]")) {
+				Files.delete(errorP);
 			}
 		} catch (Throwable e) {
 		}
@@ -191,21 +218,21 @@ class DownloadU {
 			}
 		}
 
-		if (Files.exists(errorF)) {
-			System.out.println("存在下载失败的文件，请重新运行命令以下载失败的文件");
+		if (Files.exists(errorF) || Files.exists(errorP)) {
+			System.out.println("存在下载失败的文件或帖子，请重新运行命令以下载失败的文件");
 		}
 		FileUtils.deleteDir(tempDir);
 		if (increaseDownload) {
 			if (writeP) {
-				System.out.println("增量下载用户" + user + "完成，文件存储目录:" + destDir.toString());
+				System.out.println("增量下载标签" + tag + "完成，文件存储目录:" + destDir.toString());
 			} else {
-				System.out.println("增量下载用户" + user + "完成，没有需要下载的内容");
+				System.out.println("增量下载标签" + tag + "完成，没有需要下载的内容");
 			}
 		} else {
 			if (writeP) {
-				System.out.println("下载用户" + user + "完成，文件存储目录:" + destDir.toString());
+				System.out.println("下载标签" + tag + "完成，文件存储目录:" + destDir.toString());
 			} else {
-				System.out.println("下载用户" + user + "完成，没有需要下载的内容");
+				System.out.println("下载标签" + tag + "完成，没有需要下载的内容");
 			}
 		}
 
@@ -216,7 +243,7 @@ class DownloadU {
 			try {
 				moveExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
 			} catch (InterruptedException e) {
-				System.out.println("下载用户" + user + "帖子失败");
+				System.out.println("下载标签" + tag + "帖子失败");
 				System.exit(-1);
 			}
 		}
@@ -226,33 +253,32 @@ class DownloadU {
 	 * 
 	 */
 	private void execute(String after) {
-		UserParser tp = null;
+		TagParser tp = null;
 		try {
-			tp = parser.newUserParser(this.user);
+			tp = parser.newTagParser(tag);
 		} catch (LogicException e) {
 			System.out.println(e.getMessage());
 			System.exit(-1);
 		} catch (Throwable e) {
-			System.out.println("初始化用户解析器失败");
+			System.out.println("初始化标签解析器失败");
 			System.exit(-1);
 		}
 		execute(tp, after);
-
 	}
 
-	private void execute(UserParser up, String after) {
-		UserPagingResult result = null;
+	private void execute(TagParser tp, String after) {
+		TagPagingResult result = null;
 		try {
-			result = up.paging(after, first);
+			result = tp.paging(after, first);
 		} catch (LogicException e) {
 			System.out.println(e.getMessage());
 			System.exit(-1);
 		} catch (Throwable e) {
-			System.out.println("获取用户帖子列表失败");
+			System.out.println("获取标签帖子列表失败");
 			System.exit(-1);
 		}
-		for (PostInfo url : result.getUrls()) {
-			String id = url.getId();
+		for (PagingItem item : result.getItems()) {
+			String id = item.getId();
 			if (postSet.contains(id)) {
 				if (increaseDownload) {
 					return;
@@ -265,36 +291,67 @@ class DownloadU {
 				continue;
 			}
 
-			final String shortcode = url.getShortcode();
-
-			es2.execute(() -> {
-				int index = 0;
-				CountDownLatch cdl = new CountDownLatch(url.getUrls().size());
-				for (Url curl : url.getUrls()) {
-					String ext = InsParser.getFileExtension(curl.getValue());
-					String name = id + "_" + (++index) + "." + ext;
-					Path dest = destDir.resolve(name);
-					try {
-						es.execute(() -> {
-							try {
-								DownloadF df = new DownloadF(errorF, curl.getValue(), dest, client, tempDir, shortcode);
-								df.start();
-							} finally {
-								cdl.countDown();
-							}
-						});
-					} catch (Throwable e) {
-						cdl.countDown();
-						DownloadF.logError(errorF, dest, curl.getValue(), shortcode);
-					}
-				}
+			if (item.isSideCar() || item.isVideo()) {
+				List<Url> urls = new ArrayList<>();
+				boolean error = false;
 				try {
-					cdl.await();
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
+					urls = parser.parsePost(item.getShortCode()).getUrls();
+				} catch (LogicException e) {
+					System.out.println(e.getMessage());
+					error = true;
+				} catch (Throwable e) {
+					System.out.println("解析帖子:" + item.getShortCode() + "失败");
+					error = true;
 				}
-				appendPostCode(url.getId());
-			});
+
+				if (error) {
+					logError(item.getShortCode(), item.getId());
+					appendPostCode(item.getId());
+					continue;
+				}
+
+				final List<Url> cUrls = urls;
+
+				es2.execute(() -> {
+					int index = 0;
+					CountDownLatch cdl = new CountDownLatch(cUrls.size());
+					for (Url curl : cUrls) {
+						String ext = InsParser.getFileExtension(curl.getValue());
+						String name = id + "_" + (++index) + "." + ext;
+						Path dest = destDir.resolve(name);
+						try {
+							es.execute(() -> {
+								try {
+									DownloadF df = new DownloadF(errorF, curl.getValue(), dest, client, tempDir,
+											item.getShortCode());
+									df.start();
+								} finally {
+									cdl.countDown();
+								}
+							});
+						} catch (Throwable e) {
+							cdl.countDown();
+						}
+					}
+					try {
+						cdl.await();
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					}
+					appendPostCode(item.getId());
+				});
+			} else {
+				String name = id + "_1." + InsParser.getFileExtension(item.getUrl());
+				es.execute(() -> {
+					DownloadF df = new DownloadF(errorF, item.getUrl(), destDir.resolve(name), client, tempDir,
+							item.getShortCode());
+					try {
+						df.start();
+					} finally {
+						appendPostCode(item.getId());
+					}
+				});
+			}
 		}
 		if (result.isHasNextPage()) {
 			try {
@@ -302,7 +359,7 @@ class DownloadU {
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 			}
-			execute(up, result.getEndCursor());
+			execute(tp, result.getEndCursor());
 		}
 	}
 
@@ -391,7 +448,8 @@ class DownloadU {
 		}
 
 		private Predicate<Path> filter() {
-			return p -> !p.equals(tempDir) && !p.equals(errorF) && !p.equals(posts) && !Files.isDirectory(p);
+			return p -> !p.equals(tempDir) && !p.equals(errorF) && !p.equals(errorP) && !p.equals(posts)
+					&& !Files.isDirectory(p);
 		}
 
 		private Stream<Path> quietlyList() {
@@ -445,4 +503,93 @@ class DownloadU {
 		}
 	}
 
+	private void logError(String shortCode, String id) {
+		synchronized (lock) {
+			try {
+				String content = new String(Files.readAllBytes(errorP));
+				ExpressionExecutors executors = Jsons.readJsonForExecutors(content);
+
+				JsonArray array = executors.toJsonArray();
+				JsonObject obj = new JsonObject();
+				obj.addProperty("shortcode", shortCode);
+				obj.addProperty("id", id);
+				array.add(obj);
+
+				try (Writer writer = Files.newBufferedWriter(errorP)) {
+					writer.write(Jsons.gson.toJson(array));
+				}
+			} catch (Throwable e) {
+			}
+		}
+	}
+
+	private void downloadError() {
+		if (!Files.isRegularFile(errorP)) {
+			return;
+		}
+		String content;
+		try {
+			content = new String(Files.readAllBytes(errorP));
+		} catch (IOException e) {
+			return;
+		}
+		ExpressionExecutors executors = Jsons.readJsonForExecutors(content);
+		if (executors.isNull()) {
+			return;
+		}
+		System.out.println("开始下载失败帖子");
+		JsonArray errors = new JsonArray();
+		for (ExpressionExecutor executor : executors) {
+			if (executor.isNull()) {
+				continue;
+			}
+			String shortcode = executor.execute("shortcode").get();
+			String id = executor.execute("id").get();
+			List<Url> urls = new ArrayList<>();
+			boolean error = false;
+			try {
+				urls = parser.parsePost(shortcode).getUrls();
+			} catch (LogicException e) {
+				System.out.println(e.getMessage());
+				error = true;
+			} catch (Throwable e) {
+				System.out.println("解析帖子:" + shortcode + "失败");
+				error = true;
+			}
+
+			if (error) {
+				JsonObject obj = new JsonObject();
+				obj.addProperty("shortcode", shortcode);
+				obj.addProperty("id", id);
+				errors.add(obj);
+				continue;
+			}
+
+			final List<Url> cUrls = urls;
+
+			int index = 0;
+			boolean logP = false;
+			for (Url curl : cUrls) {
+				try {
+					String ext = InsParser.getFileExtension(curl.getValue());
+					String name = id + "_" + (++index) + "." + ext;
+					Path dest = destDir.resolve(name);
+					DownloadF df = new DownloadF(errorF, curl.getValue(), dest, client, tempDir, shortcode);
+					df.start();
+				} catch (Exception e) {
+					if (!logP) {
+						JsonObject obj = new JsonObject();
+						obj.addProperty("shortcode", shortcode);
+						obj.addProperty("id", id);
+						errors.add(obj);
+						logP = true;
+					}
+				}
+			}
+		}
+		try (Writer writer = Files.newBufferedWriter(errorP)) {
+			writer.write(Jsons.gson.toJson(errors));
+		} catch (Exception e) {
+		}
+	}
 }

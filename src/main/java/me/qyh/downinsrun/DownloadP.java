@@ -58,12 +58,12 @@ class DownloadP {
 
 	public void start() {
 		// 下载失败文件
-		DownloadF.downloadError(client, errorF, tempDir);
+		DownloadF.downloadError(parser,client, errorF, tempDir);
 
 		List<Url> urls = new ArrayList<>();
 		boolean error = false;
 		try {
-			urls = parser.parsePost(code);
+			urls = parser.parsePost(code).getUrls();
 		} catch (LogicException e) {
 			System.out.println(e.getMessage());
 			System.exit(-1);
@@ -84,7 +84,7 @@ class DownloadP {
 			System.out.println(url);
 			String name = code + "_" + (++index) + "." + InsParser.getFileExtension(url.getValue());
 			es.execute(() -> {
-				DownloadF df = new DownloadF(errorF, url.getValue(), root.resolve(name), client, tempDir);
+				DownloadF df = new DownloadF(errorF, url.getValue(), root.resolve(name), client, tempDir, code);
 				df.start();
 			});
 		}
@@ -104,7 +104,7 @@ class DownloadP {
 		} catch (Throwable e) {
 		}
 
-		DownloadF.downloadError(client, errorF, tempDir);
+		DownloadF.downloadError(parser,client, errorF, tempDir);
 
 		try {
 			String errorFContent = new String(Files.readAllBytes(errorF));
