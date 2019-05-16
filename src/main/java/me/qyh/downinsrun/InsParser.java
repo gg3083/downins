@@ -2,8 +2,10 @@ package me.qyh.downinsrun;
 
 import java.io.File;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -175,7 +177,7 @@ public class InsParser {
 		return Optional.of(url);
 	}
 
-	private String doMd5(String content) throws Exception {
+	private static String doMd5(String content) throws Exception {
 		MessageDigest md = MessageDigest.getInstance("MD5");
 		byte[] thedigest = md.digest(content.getBytes("UTF-8"));
 		StringBuilder sb = new StringBuilder();
@@ -347,7 +349,7 @@ public class InsParser {
 						&& !ee.execute("activity_counts").isPresent()) {
 					throw new LogicException("访问私密账户需要设置sessionid");
 				}
-				this.rhs = ee.execute("rhx_gis").get();
+				this.rhs = ee.execute("config->csrf_token").get();
 			} else {
 				throw new LogicException("设置查询参数失败");
 			}
@@ -405,7 +407,7 @@ public class InsParser {
 			HttpGet get = new HttpGet(builder.build());
 			String md5 = doMd5(this.rhs + ":" + variables);
 			get.addHeader("x-instagram-gis", md5);
-			get.addHeader("referer", "https://www.instagram.com/" + this.username + "/");
+			get.addHeader("referer", URLEncoder.encode("https://www.instagram.com/" + this.username + "/", "utf8"));
 			get.addHeader("user-agent", USER_AGENT);
 
 			String content;
@@ -533,7 +535,8 @@ public class InsParser {
 
 		private static final String URL = "https://www.instagram.com/explore/tags";
 		private static final String APPID_JS_NAME = "ConsumerLibCommons.js";
-		private static final String QUERYID_JS_NAME = "Consumer.js";
+		private static final String QUERYID_JS_NAME = "TagPageContainer.js";
+		private static final String QUERYID_JS_NAME2 = "Consumer.js";
 		private static final String TAG_VARIABLES = "{\"tag_name\":\"%s\",\"show_ranked\":false,\"first\":%s,\"after\":\"%s\"}";
 
 		private final String tag;
@@ -581,7 +584,7 @@ public class InsParser {
 				System.out.println("连接地址成功:" + url + "，开始设置查询参数");
 			}
 
-			String[] gis = Jsons.substringsBetween(content, "rhx_gis\":\"", "\"");
+			String[] gis = Jsons.substringsBetween(content, "csrf_token\":\"", "\"");
 			if (gis.length == 0) {
 				throw new LogicException("设置查询参数rhx_gis失败");
 			}
@@ -595,24 +598,24 @@ public class InsParser {
 			}
 
 			String appIdJsUrl = null;
-			String queryIdJsUrl = null;
+			List<String> queryIdJsUrls = new ArrayList<>();
 
 			for (Element ele : eles) {
 				String href = ele.attr("href");
 				if (href.contains(APPID_JS_NAME)) {
 					appIdJsUrl = USER_URL_PREFIX + href;
 				}
-				if (href.contains(QUERYID_JS_NAME)) {
-					queryIdJsUrl = USER_URL_PREFIX + href;
+				if (href.contains(QUERYID_JS_NAME) || href.contains(QUERYID_JS_NAME2)) {
+					queryIdJsUrls.add(USER_URL_PREFIX + href);
 				}
 			}
 
-			if (appIdJsUrl == null || queryIdJsUrl == null) {
+			if (appIdJsUrl == null || queryIdJsUrls.isEmpty()) {
 				throw new LogicException("设置查询参数失败");
 			}
 
-			setQueryID(queryIdJsUrl);
 			setAppId(appIdJsUrl);
+			setQueryID(queryIdJsUrls);
 
 			if (!quiet) {
 				System.out.println("设置查询参数成功");
@@ -640,13 +643,32 @@ public class InsParser {
 			return tops;
 		}
 
-		private void setQueryID(String jsUrl) throws Exception {
-			String content = getUrlSource(jsUrl);
-			String[] queryIds = Jsons.substringsBetween(content, "pagination},queryId:\"", "\",queryParams");
-			if (queryIds.length == 0) {
-				throw new LogicException("获取查询参数query_hash失败");
+		private void setQueryID(List<String> jsUrls) throws Exception {
+			List<String> queryIds = new ArrayList<>();
+			for (String jsUrl : jsUrls) {
+				String content = getUrlSource(jsUrl);
+				queryIds.addAll(Arrays.asList(Jsons.substringsBetween(content, "queryId:\"", "\"")));
 			}
-			this.queryId = queryIds[0];
+			Collections.reverse(queryIds);
+			for (String queryId : queryIds) {
+				if (!quiet) {
+					System.out.println("开始尝试query_hash:" + queryId);
+				}
+				this.queryId = queryId;
+				try {
+					this.toExpressionExecutor("", 12);
+					if (!quiet) {
+						System.out.println("query_hash:" + queryId + "设置成功");
+					}
+				} catch (Exception e) {
+					if (!quiet) {
+						System.out.println("query_hash:" + queryId + "失败");
+					}
+				}
+				Thread.sleep(1000);
+				return;
+			}
+			throw new LogicException("获取查询参数query_hash失败");
 		}
 
 		private void setAppId(String jsUrl) throws Exception {
@@ -691,7 +713,7 @@ public class InsParser {
 			String md5 = doMd5(this.rhx_gis + ":" + variables);
 			get.addHeader("x-instagram-gis", md5);
 			get.addHeader("x-ig-app-id", this.appId);
-			get.addHeader("referer", URL + "/" + tag + "/");
+			get.addHeader("referer", URLEncoder.encode(URL + "/" + tag + "/", "utf8"));
 			get.addHeader("user-agent", USER_AGENT);
 			get.addHeader("x-requested-with", "XMLHttpRequest");
 
@@ -739,10 +761,6 @@ public class InsParser {
 				return new TagPagingResult(items, endCursor, hasNextPage, count);
 			}
 			throw new LogicException("查询数据失败:" + ee);
-		}
-
-		public void test() {
-
 		}
 	}
 
@@ -823,9 +841,5 @@ public class InsParser {
 		public int getCount() {
 			return count;
 		}
-	}
-
-	public static void main(String[] args) throws Exception {
-		new InsParser(false, Https.newHttpClient()).newTagParser("陈钰琪yukee").refreshTops();
 	}
 }
