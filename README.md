@@ -16,6 +16,10 @@ java -jar /path/to/jar u username|url maxFileInDir
 ```
 java -jar /path/to/jar p shortcode|url
 ```
+下载某个标签的全部图片|视频
+```
+java -jar /path/to/jar t tag|url maxFileInDir
+```
 打开配置面板(如果支持GUI)
 ```
 java -jar /path/to/jar s
