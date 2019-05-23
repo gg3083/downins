@@ -1,5 +1,7 @@
 https://www.qyh.me/space/java/article/downins
 
+**使用了非官方的API，仅供娱乐使用**
+
 1.  一行命令下载用户所有帖子的图片|视频
 2.  支持下载私密账户(需要设置sessionid)
 3.  支持增量下载
