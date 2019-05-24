@@ -22,6 +22,14 @@ java -jar /path/to/jar p shortcode|url
 ```
 java -jar /path/to/jar t tag|url maxFileInDir
 ```
+下载某个IGTV的视频
+```
+java -jar /path/to/jar i shortcode|url
+```
+下载某个用户的全部IGTV
+```
+java -jar /path/to/jar c username|url maxFileInDir
+```
 打开配置面板(如果支持GUI)
 ```
 java -jar /path/to/jar s
