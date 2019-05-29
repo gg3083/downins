@@ -1,5 +1,15 @@
 package me.qyh.downinsrun;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -14,7 +24,95 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-public class Jsons {
+public class Utils {
+
+	private static final char SPLITER = '/';
+	private static final char SPLITER2 = '\\';
+
+	public static String cleanPath(String path) {
+		if (path == null || path.trim().isEmpty()) {
+			return "";
+		}
+		char[] chars = path.toCharArray();
+		char prev = chars[0];
+		char last = SPLITER;
+		if (chars.length == 1) {
+			if (prev == SPLITER || prev == SPLITER2) {
+				return "";
+			}
+			return Character.toString(prev);
+		}
+		if (prev == SPLITER2) {
+			prev = SPLITER;
+		}
+		StringBuilder sb = new StringBuilder();
+		if (prev != SPLITER) {
+			sb.append(prev);
+		}
+		for (int i = 1; i < chars.length; i++) {
+			char ch = chars[i];
+			if (ch == SPLITER || ch == SPLITER2) {
+				if (prev == SPLITER) {
+					continue;
+				}
+				prev = SPLITER;
+				if (i < chars.length - 1) {
+					sb.append(SPLITER);
+					last = SPLITER;
+				}
+			} else {
+				prev = ch;
+				sb.append(ch);
+				last = ch;
+			}
+		}
+		if (last == SPLITER) {
+			sb.deleteCharAt(sb.length() - 1);
+		}
+		return sb.toString();
+	}
+
+	public static void deleteDir(Path dir) {
+		if (dir != null && Files.exists(dir)) {
+			try {
+				Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+					@Override
+					public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+						try {
+							Files.delete(file);
+						} catch (Exception e) {
+						}
+						return FileVisitResult.CONTINUE;
+					}
+
+					@Override
+					public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+						try {
+							Files.delete(dir);
+						} catch (Exception e) {
+						}
+						return FileVisitResult.CONTINUE;
+					}
+				});
+			} catch (Exception e) {
+			}
+		}
+	}
+
+	public static String doMd5(String content) {
+		try {
+			MessageDigest md = MessageDigest.getInstance("MD5");
+			byte[] thedigest = md.digest(content.getBytes("UTF-8"));
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i < thedigest.length; i++) {
+				sb.append(Integer.toString((thedigest[i] & 0xff) + 0x100, 16).substring(1));
+			}
+			return sb.toString();
+		} catch (Exception e) {
+			throw new RuntimeException(e.getMessage(), e);
+		}
+	}
+
 	private static final String SPLIT_STR = "->";
 	private static final String[] EMPTY_ARRAY = new String[0];
 
@@ -318,7 +416,7 @@ public class Jsons {
 		@Override
 		public Iterator<ExpressionExecutor> iterator() {
 			final Iterator<JsonElement> it = array.iterator();
-			return new Iterator<Jsons.ExpressionExecutor>() {
+			return new Iterator<ExpressionExecutor>() {
 
 				@Override
 				public ExpressionExecutor next() {
@@ -404,5 +502,31 @@ public class Jsons {
 	public static <T> List<T> readList(Class<T[]> clazz, String json) {
 		final T[] jsonToObject = gson.fromJson(json, clazz);
 		return new ArrayList<>(Arrays.asList(jsonToObject));
+	}
+
+	public static String getFileExtension(String path) {
+		String name = new File(path).getName();
+		String ext = name;
+		int index = name.lastIndexOf('?');
+		if (index > -1) {
+			ext = ext.substring(0, index);
+		}
+		index = ext.lastIndexOf('.');
+		if (index > -1) {
+			ext = ext.substring(index + 1);
+		}
+		index = ext.indexOf('?');
+		if (index > -1) {
+			ext = ext.substring(0, index);
+		}
+		return ext;
+	}
+
+	public static String encodeUrl(String url) {
+		try {
+			return URLEncoder.encode(url, "utf8");
+		} catch (UnsupportedEncodingException e) {
+			throw new RuntimeException(e);
+		}
 	}
 }

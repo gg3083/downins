@@ -1,4 +1,4 @@
-package me.qyh.downinsrun;
+package me.qyh.downinsrun.parser;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,10 +15,15 @@ import org.apache.http.HttpEntity;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+
+import me.qyh.downinsrun.Configure;
+import me.qyh.downinsrun.DowninsCookieStore;
+import me.qyh.downinsrun.DowninsHttpRoutePlanner;
 
 public class Https {
 
@@ -35,11 +40,18 @@ public class Https {
 
 	public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36";
 
-	public static String toString(CloseableHttpClient client, HttpRequestBase req) throws IOException {
+	public static String toString(CloseableHttpClient client, HttpRequestBase req) throws InvalidStateCodeException {
 		return toString(client, req, 30);
 	}
 
-	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec) throws IOException {
+	public static String toString(CloseableHttpClient client, String url) throws InvalidStateCodeException {
+		HttpGet get = new HttpGet(url);
+		get.addHeader("user-agent", USER_AGENT);
+		return toString(client, get, 30);
+	}
+
+	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec)
+			throws InvalidStateCodeException {
 		try (CloseableHttpResponse response = client.execute(req)) {
 			int statusCode = response.getStatusLine().getStatusCode();
 			if (statusCode != 200) {
@@ -50,7 +62,7 @@ public class Https {
 						return toString(client, req, sec + 30);
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
-						throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode);
+						throw new RuntimeException(e);
 					}
 				}
 				throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode);
@@ -67,6 +79,10 @@ public class Https {
 			}
 			EntityUtils.consumeQuietly(entity);
 			return sb.toString();
+		} catch (InvalidStateCodeException e) {
+			throw e;
+		} catch (IOException e) {
+			throw new RuntimeException("获取地址：" + req.getURI() + "内容失败", e);
 		} finally {
 			req.releaseConnection();
 		}
@@ -76,7 +92,7 @@ public class Https {
 			DownloadProgressNotify notify, Path tempDir) throws Exception {
 		if (Files.exists(dest)) {
 			if (notify != null) {
-				notify.notify(100);
+				notify.notify(dest, 100);
 			}
 			System.out.println("文件" + dest + "已经存在");
 			return;
@@ -117,7 +133,7 @@ public class Https {
 			EntityUtils.consumeQuietly(entity);
 
 			if (progress != null) {
-				notify.notify(100D);
+				notify.notify(dest, 100D);
 			}
 
 		} finally {
@@ -151,7 +167,7 @@ public class Https {
 	}
 
 	public static interface DownloadProgressNotify {
-		public void notify(double percent);
+		public void notify(Path dest, double percent);
 	}
 
 	public static final class DownloadProgress {
@@ -171,7 +187,7 @@ public class Https {
 					if (size == contentLength) {
 						ses.shutdownNow();
 					}
-					notify.notify(pct);
+					notify.notify(p, pct);
 				}, 100, 100, TimeUnit.MILLISECONDS);
 			} else {
 				ses = null;
@@ -185,4 +201,5 @@ public class Https {
 
 		}
 	}
+
 }
