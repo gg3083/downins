@@ -1,5 +1,7 @@
 https://www.qyh.me/space/java/article/downins
 
+**使用了非官方的API，仅供娱乐使用**
+
 1.  一行命令下载用户所有帖子的图片|视频
 2.  支持下载私密账户(需要设置sessionid)
 3.  支持增量下载
@@ -19,6 +21,14 @@ java -jar /path/to/jar p shortcode|url
 下载某个标签的全部图片|视频
 ```
 java -jar /path/to/jar t tag|url maxFileInDir
+```
+下载某个IGTV的视频
+```
+java -jar /path/to/jar i shortcode|url
+```
+下载某个用户的全部IGTV
+```
+java -jar /path/to/jar c username|url maxFileInDir
 ```
 打开配置面板(如果支持GUI)
 ```
