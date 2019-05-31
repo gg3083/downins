@@ -61,10 +61,10 @@ java -jar /path/to/jar s threadNum=1
 | sid   | sessionid   |   
 
 ## 通过web服务选择性下载
-**web服务只能用于本地下载，不能对外提供服务，在此之前，请确保21134端口可以被程序占用**
+**web服务只能用于本地下载，不能对外提供服务，在此之前，请确保默认端口(21134)或者指定的端口可以被程序占用**
 1. 开启web服务  
 ```
-java -jar /path/to/jar
+java -jar /path/to/jar [port]
 ```
 2. 选择文件  
 ![选择文件.png](https://www.qyh.me/image/github/QQ截图20190531234422.png/600)
