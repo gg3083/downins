@@ -1,7 +1,6 @@
-https://www.qyh.me/space/java/article/downins
+# 使用了非官方的API，仅供娱乐使用
 
-**使用了非官方的API，仅供娱乐使用**
-
+## 通过命令行下载
 1.  一行命令下载用户所有帖子的图片|视频
 2.  支持下载私密账户(需要设置sessionid)
 3.  支持增量下载
@@ -58,8 +57,8 @@ java -jar /path/to/jar s threadNum=1
 | sid   | sessionid   |   
 
 
-**通过程序下载**
-
+## 通过程序下载
+**程序只封装了图片|视频的访问地址，类型等用于下载的最基本信息，无法获取点赞数、访问数等其他信息**
 ```java
 // 设置ss代理、保存地址并保存
 Configure.get().getConfig().setProxyAddr("127.0.0.1").setProxyPort(1080).setLocation("d:/downins3").store();
