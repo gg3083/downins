@@ -32,7 +32,7 @@ public final class TagParser {
 	private final String tag;
 
 	private String queryId;
-	private String appId;
+	private String appId = InsParser.X_IG_APP_ID;
 	private String rhx_gis;
 
 	private List<PagingItem> tops = new ArrayList<>();
@@ -95,7 +95,7 @@ public final class TagParser {
 			throw new LogicException("设置查询参数失败");
 		}
 
-		setAppId(appIdJsUrl);
+//		setAppId(appIdJsUrl);
 		setQueryID(queryIdJsUrls);
 
 		if (!quiet) {
@@ -162,20 +162,20 @@ public final class TagParser {
 		}
 		throw new LogicException("获取查询参数query_hash失败");
 	}
-
-	private void setAppId(String jsUrl) throws LogicException {
-		String content;
-		try {
-			content = Https.toString(client, jsUrl);
-		} catch (InvalidStateCodeException e) {
-			throw new RuntimeException("请求:" + jsUrl + "返回错误的状态码");
-		}
-		String[] appIds = Utils.substringsBetween(content, "instagramWebFBAppId='", "'");
-		if (appIds.length == 0) {
-			throw new LogicException("获取查询参数x-ig-app-id失败");
-		}
-		this.appId = appIds[0];
-	}
+//
+//	private void setAppId(String jsUrl) throws LogicException {
+//		String content;
+//		try {
+//			content = Https.toString(client, jsUrl);
+//		} catch (InvalidStateCodeException e) {
+//			throw new RuntimeException("请求:" + jsUrl + "返回错误的状态码");
+//		}
+//		String[] appIds = Utils.substringsBetween(content, "instagramWebFBAppId='", "'");
+//		if (appIds.length == 0) {
+//			throw new LogicException("获取查询参数x-ig-app-id失败");
+//		}
+//		this.appId = appIds[0];
+//	}
 
 	public void refreshTops() throws LogicException {
 		ExpressionExecutor ee = toExpressionExecutor("", 12);

@@ -2,8 +2,9 @@ package me.qyh.downinsrun;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLDecoder;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -522,11 +523,24 @@ public class Utils {
 		return ext;
 	}
 
-	public static String encodeUrl(String url) {
+	public static String encodeUrl(String urlString2Decode) {
 		try {
-			return URLEncoder.encode(url, "utf8");
-		} catch (UnsupportedEncodingException e) {
+			String decodedURL = URLDecoder.decode(urlString2Decode, "UTF-8");
+			URL url = new URL(decodedURL);
+			URI uri = new URI(url.getProtocol(), url.getUserInfo(), url.getHost(), url.getPort(), url.getPath(),
+					url.getQuery(), url.getRef());
+			return uri.toASCIIString();
+		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	public static <T> List<List<T>> chopped(List<T> list, final int L) {
+		List<List<T>> parts = new ArrayList<List<T>>();
+		final int N = list.size();
+		for (int i = 0; i < N; i += L) {
+			parts.add(new ArrayList<T>(list.subList(i, Math.min(N, i + L))));
+		}
+		return parts;
 	}
 }

@@ -27,7 +27,7 @@ public final class ChannelParser {
 	private static final String CHANNEL_VARIABLES = "{\"id\":\"%s\",\"first\":%s,\"after\":\"%s\"}";
 
 	private String userId;
-	private String appId;
+	private String appId = InsParser.X_IG_APP_ID;
 	private final String username;
 	private String queryId;
 
@@ -108,9 +108,6 @@ public final class ChannelParser {
 		try {
 			content = Https.toString(client, get);
 		} catch (InvalidStateCodeException e) {
-			if (e.getCode() == 429) {
-				throw new LogicException("达到客户端连接频率限制，请稍后尝试");
-			}
 			throw new RuntimeException("错误的请求状态码：" + e.getCode(), e);
 		}
 		ExpressionExecutor ee = Utils.readJson(content);
@@ -147,11 +144,11 @@ public final class ChannelParser {
 		} catch (InvalidStateCodeException e) {
 			throw new RuntimeException("请求:" + jsUrl + "返回错误的状态码");
 		}
-		String[] appIds = Utils.substringsBetween(content, "instagramWebFBAppId='", "'");
-		if (appIds.length == 0) {
-			throw new LogicException("获取查询参数x-ig-app-id失败");
-		}
-		this.appId = appIds[0];
+//		String[] appIds = Utils.substringsBetween(content, "instagramWebFBAppId='", "'");
+//		if (appIds.length == 0) {
+//			throw new LogicException("获取查询参数x-ig-app-id失败");
+//		}
+//		this.appId = appIds[0];
 		String[] queryIds = Utils.substringsBetween(content, "USER_FELIX_MEDIA:{id:\"", "\"");
 		if (queryIds.length == 0) {
 			throw new LogicException("获取查询参数query_hash失败");

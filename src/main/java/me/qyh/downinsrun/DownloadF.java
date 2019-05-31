@@ -105,7 +105,7 @@ public class DownloadF {
 			es.execute(() -> {
 				String url = executor.execute("url").get();
 				Path dest = Paths.get(executor.execute("location").get());
-				String shortcode = executor.execute("shortcode").orElse("");
+				String shortcode = executor.execute("shortcode").orElse(null);
 				int index = executor.execute("index").map(Integer::parseInt).get();
 				HttpGet get = new HttpGet(url);
 				get.addHeader("user-agent", Https.USER_AGENT);
@@ -123,7 +123,7 @@ public class DownloadF {
 							return;
 						}
 
-						if (code == 403 && !shortcode.isEmpty()) {
+						if (code == 403 && shortcode != null && !shortcode.isEmpty()) {
 							try {
 								PostInfo pi = parser.parsePost(shortcode);
 								Thread.sleep(1000);

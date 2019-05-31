@@ -23,12 +23,14 @@ import me.qyh.downinsrun.parser.InsParser.Url;
 
 public final class UserParser {
 	private static final String PAGING_VARIABLES = "{\"id\":\"%s\",\"first\":%s,\"after\":\"%s\"}";
+	private static final String STORIES_VARIABLES = "{\"user_id\":\"%s\",\"include_chaining\":true,\"include_reel\":true,\"include_suggested_users\":false,\"include_logged_out_extras\":false,\"include_highlight_reels\":true}";
 
 	private final String username;
 
 	private String queryId;
 	private String userId;
 	private String rhs;
+	private String storeQueryId;
 
 	@SuppressWarnings("unused")
 	private final boolean quiet;
@@ -94,7 +96,7 @@ public final class UserParser {
 
 		for (Element ele : eles) {
 			String href = ele.attr("href");
-			if (href.contains("rofilePageContainer.js")) {
+			if (href.contains("ProfilePageContainer.js")) {
 				queryIdJsUrl = InsParser.URL_PREFIX + href;
 				break;
 			}
@@ -122,18 +124,63 @@ public final class UserParser {
 		} catch (InvalidStateCodeException e) {
 			throw new RuntimeException("获取地址：" + url + "内容失败，响应码：" + e.getCode());
 		}
+		String[] storyQueryIds = Utils.substringsBetween(content, "const o=\"", "\"");
+		if (storyQueryIds.length == 0) {
+			throw new LogicException("获取story query id失败");
+		}
+		this.storeQueryId = storyQueryIds[0];
 		String[] queryIds = Utils.substringsBetween(content, "queryId:\"", "edge_owner_to_timeline_media");
 		if (queryIds.length == 0) {
-			return;
+			throw new LogicException("获取 query id失败");
 		}
 		for (String queryId : queryIds) {
 			int index = queryId.lastIndexOf("queryId");
 			if (index != -1) {
 				String hash = Utils.substringBetween(queryId.substring(index), "queryId:\"", "\"");
 				this.queryId = hash;
-				break;
+				return;
 			}
 		}
+		throw new LogicException("获取 query id失败");
+	}
+
+	public List<Story> stories() throws LogicException {
+		String variables = String.format(STORIES_VARIABLES, this.userId);
+		URI uri;
+		try {
+			URIBuilder builder = new URIBuilder("https://www.instagram.com/graphql/query/");
+			uri = builder.addParameter("query_hash", this.storeQueryId).addParameter("variables", variables).build();
+		} catch (Exception e) {
+			throw new RuntimeException(e.getMessage(), e);
+		}
+		HttpGet get = new HttpGet(uri);
+		get.addHeader("referer", Utils.encodeUrl("https://www.instagram.com/" + this.username + "/"));
+		get.addHeader("user-agent", Https.USER_AGENT);
+
+		String content;
+		try {
+			content = Https.toString(client, get);
+		} catch (InvalidStateCodeException e) {
+			throw new RuntimeException("获取地址：" + uri + "内容失败，响应码：" + e.getCode());
+		}
+
+		ExpressionExecutor ee = Utils.readJson(content);
+		String status = ee.execute("status").orElse(null);
+		if ("ok".equals(status)) {
+
+			ExpressionExecutors edges = ee.executeForExecutors("data->user->edge_highlight_reels->edges");
+			List<Story> stories = new ArrayList<>(edges.size());
+			for (ExpressionExecutor edge : edges) {
+				ExpressionExecutor node = edge.executeForExecutor("node");
+
+				String thumb = node.execute("cover_media_cropped_thumbnail->url").get();
+				String id = node.execute("id").get();
+				stories.add(new Story(id, thumb));
+			}
+
+			return stories;
+		}
+		throw new LogicException("查询数据失败:" + content);
 	}
 
 	public UserPagingResult paging(String after, int first) throws LogicException {

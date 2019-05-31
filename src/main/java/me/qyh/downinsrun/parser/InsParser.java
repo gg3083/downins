@@ -1,14 +1,23 @@
 package me.qyh.downinsrun.parser;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import me.qyh.downinsrun.LogicException;
 import me.qyh.downinsrun.Utils;
@@ -23,9 +32,16 @@ public class InsParser {
 	public static final String GRAPH_IMAGE = "GraphImage";
 	public static final String GRAPH_VIDEO = "GraphVideo";
 	public static final String GRAPH_SIDECAR = "GraphSidecar";
+	public static final String X_IG_APP_ID = "1217981644879628";
+	public static final String STORY_URL_PREFIX = "https://www.instagram.com/stories/highlights/%s";
+
+	private static final String STORIES_VARIABLES = "{\"reel_ids\":[],\"tag_names\":[],\"location_ids\":[],\"highlight_reel_ids\":[%s],\"precomposed_overlay\":false,\"show_story_viewer_list\":true,\"story_viewer_fetch_count\":50,\"story_viewer_cursor\":\"\",\"stories_video_dash_manifest\":false}";
+	private static final String STORY_QUERY_ID_JS_NAME = "Consumer.js";
 
 	private final boolean quiet;
 	private final CloseableHttpClient client;
+
+	private String storyQueryId;
 
 	public InsParser(boolean quiet, CloseableHttpClient client) {
 		super();
@@ -100,6 +116,141 @@ public class InsParser {
 		return pi;
 	}
 
+	public Map<String, List<Url>> parseStory(String... ids) throws LogicException {
+		if (ids == null || ids.length == 0) {
+			return Collections.emptyMap();
+		} else {
+			setStoryQueryId();
+
+			Map<String, List<Url>> map = new HashMap<>();
+
+			// 每次查询5个
+			List<List<String>> chopped = Utils.chopped(Arrays.asList(ids), 5);
+			for (List<String> chop : chopped) {
+				map.putAll(this.queryStory(chop));
+
+				try {
+					Thread.sleep(1000);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+
+			return map;
+		}
+	}
+
+	private Map<String, List<Url>> queryStory(List<String> chopped) throws LogicException {
+		StringBuilder sb = new StringBuilder();
+		for (String id : chopped) {
+			sb.append("\"").append(id).append("\"");
+			sb.append(",");
+		}
+		sb.deleteCharAt(sb.length() - 1);
+		URI uri;
+		try {
+			URIBuilder builder = new URIBuilder("https://www.instagram.com/graphql/query/");
+			String variables = String.format(STORIES_VARIABLES, sb.toString());
+			builder.addParameter("query_hash", this.storyQueryId).addParameter("variables", variables);
+			uri = builder.build();
+		} catch (URISyntaxException e) {
+			throw new RuntimeException(e);
+		}
+		HttpGet get = new HttpGet(uri);
+		get.addHeader("x-ig-app-id", X_IG_APP_ID);
+		get.addHeader("referer", URL_PREFIX);
+		get.addHeader("user-agent", Https.USER_AGENT);
+		get.addHeader("x-requested-with", "XMLHttpRequest");
+
+		String content;
+		try {
+			content = Https.toString(client, get);
+		} catch (InvalidStateCodeException e) {
+			throw new RuntimeException("错误的请求状态码：" + e.getCode(), e);
+		}
+		ExpressionExecutor ee = Utils.readJson(content);
+		String status = ee.execute("status").orElse(null);
+		if ("ok".equals(status)) {
+			Map<String, List<Url>> map = new HashMap<>();
+			ExpressionExecutors ees = ee.executeForExecutors("data->reels_media");
+			for (ExpressionExecutor _ee : ees) {
+				String id = _ee.execute("id").get();
+				List<Url> urls = new ArrayList<>();
+				ExpressionExecutors items = _ee.executeForExecutors("items");
+				for (ExpressionExecutor item : items) {
+					String displayUrl = item.execute("display_url").get();
+					Url display = new Url(GRAPH_IMAGE, displayUrl);
+					if (item.execute("is_video").map(Boolean::parseBoolean).orElse(false)) {
+						ExpressionExecutors videos = item.executeForExecutors("video_resources");
+						ExpressionExecutor video = videos.getExpressionExecutor(videos.size() - 1);
+						VideoUrl vu = new VideoUrl(video.execute("src").get(), display);
+						urls.add(vu);
+					} else {
+						urls.add(display);
+					}
+				}
+				map.put(id, urls);
+			}
+			return map;
+		} else {
+			throw new LogicException("查询数据失败:" + ee);
+		}
+	}
+
+	private void setStoryQueryId() throws LogicException {
+		if (this.storyQueryId == null) {
+			synchronized (this) {
+				if (this.storyQueryId == null) {
+					if (!quiet) {
+						System.out.println("开始设置story query id");
+					}
+					String content;
+					try {
+						content = Https.toString(client, URL_PREFIX + "/instagram/");
+					} catch (InvalidStateCodeException e) {
+						throw new RuntimeException("获取地址：" + URL_PREFIX + "/instagram/内容失败，响应码：" + e.getCode());
+					}
+
+					Document doc = Jsoup.parse(content);
+					Elements eles = doc.select("link[type=\"text/javascript\"]");
+					if (eles.isEmpty()) {
+						throw new LogicException("设置story query id失败");
+					}
+
+					String queryIdJsUrl = null;
+
+					for (Element ele : eles) {
+						String href = ele.attr("href");
+						if (href.contains(STORY_QUERY_ID_JS_NAME)) {
+							queryIdJsUrl = URL_PREFIX + href;
+							break;
+						}
+					}
+
+					if (queryIdJsUrl == null) {
+						throw new LogicException("设置story query id失败");
+					}
+
+					try {
+						content = Https.toString(client, queryIdJsUrl);
+					} catch (InvalidStateCodeException e) {
+						throw new RuntimeException("获取地址：" + queryIdJsUrl + "内容失败，响应码：" + e.getCode());
+					}
+
+					String[] queryIds = Utils.substringsBetween(content, "E=\"", "\"");
+					if (queryIds.length > 0) {
+						this.storyQueryId = queryIds[queryIds.length - 1];
+						if (!quiet) {
+							System.out.println("设置story query id成功");
+						}
+					} else {
+						throw new LogicException("设置story query id失败");
+					}
+				}
+			}
+		}
+	}
+
 	public static Optional<String> getUsername(String url) {
 		int index = url.lastIndexOf('?');
 		if (index != -1) {
@@ -131,6 +282,21 @@ public class InsParser {
 			if (str != null && !str.trim().isEmpty()) {
 				return Optional.of(str);
 			}
+			return Optional.empty();
+		}
+		return Optional.of(url);
+	}
+
+	public static Optional<String> getStoryId(String url) {
+		if (url.startsWith("https://")) {
+			while (url.endsWith("/")) {
+				url = url.substring(0, url.length() - 1);
+			}
+			String str = Utils.substringBetween(url + "/", "highlights/", "/");
+			if (str != null && !str.trim().isEmpty()) {
+				return Optional.of(str);
+			}
+			return Optional.empty();
 		}
 		return Optional.of(url);
 	}
@@ -144,6 +310,7 @@ public class InsParser {
 			if (str != null && !str.trim().isEmpty()) {
 				return Optional.of(str);
 			}
+			return Optional.empty();
 		}
 		return Optional.of(url);
 	}
@@ -157,6 +324,7 @@ public class InsParser {
 			if (str != null && !str.trim().isEmpty()) {
 				return Optional.of(str);
 			}
+			return Optional.empty();
 		}
 		return Optional.of(url);
 	}
@@ -170,11 +338,12 @@ public class InsParser {
 			if (str != null && !str.trim().isEmpty()) {
 				return Optional.of(str);
 			}
+			return Optional.empty();
 		}
 		return Optional.of(url);
 	}
 
-	public static Optional<String> getSharedData(Document doc) {
+	static Optional<String> getSharedData(Document doc) {
 		for (Element ele : doc.select("script")) {
 			String data = ele.data().trim();
 			if (data.startsWith("window._sharedData")) {

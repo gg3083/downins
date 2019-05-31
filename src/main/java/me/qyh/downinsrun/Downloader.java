@@ -28,9 +28,21 @@ public class Downloader {
 	}
 
 	public static void main(String[] args) throws Exception {
+		if (args.length == 0 || args[0].equalsIgnoreCase("l")) {
+			System.out.println("u username|url [maxFilesInDir] 根据用户名或者用户主页地址下载用户的全部帖子文件");
+			System.out.println("p shortcode|url 根据帖子shortcode或者帖子地址下载帖子内全部文件");
+			System.out.println("t tag|url [maxFilesInDir] 根据帖子标签名或者标签页地址下载标签内全部文件");
+			System.out.println("i shortcode|url 根据IGTV shortcode或者IGTV地址下载视频文件");
+			System.out.println("c username|url [maxFilesInDir] 根据用户名或者用户主页地址下载channel全部文件");
+			System.out.println("_s storyid|url 根据storyid或者story地址下载story全部文件");
+			System.out.println("ss username|url 根据用户名或者用户主页地址下载用户的全部story文件");
+			System.out.println("s 开启一个设置面板(如果支持GUI)");
+			System.exit(0);
+		}
 		String type = args[0];
 		if (!type.equalsIgnoreCase("u") && !type.equalsIgnoreCase("p") && !type.equalsIgnoreCase("t")
-				&& !type.equalsIgnoreCase("i") && !type.equalsIgnoreCase("c")) {
+				&& !type.equalsIgnoreCase("i") && !type.equalsIgnoreCase("c") && !type.equalsIgnoreCase("_s")
+				&& !type.equalsIgnoreCase("ss")) {
 
 			if (type.equalsIgnoreCase("s")) {
 				processSetting(args);
@@ -58,6 +70,12 @@ public class Downloader {
 		if (type.equalsIgnoreCase("c")) {
 			opsign = InsParser.getChannel(url);
 		}
+		if (type.equalsIgnoreCase("ss")) {
+			opsign = InsParser.getUsername(url);
+		}
+		if (type.equalsIgnoreCase("_s")) {
+			opsign = InsParser.getStoryId(url);
+		}
 		if (opsign == null || !opsign.isPresent()) {
 			prtError("无法解析的地址或标识");
 		}
@@ -71,6 +89,12 @@ public class Downloader {
 		}
 		if ("i".equalsIgnoreCase(type)) {
 			new DownloadI(sign, dir).start();
+		}
+		if ("ss".equalsIgnoreCase(type)) {
+			new DownloadSS(sign, dir).start();
+		}
+		if ("_s".equalsIgnoreCase(type)) {
+			new DownloadS(sign, dir).start();
 		}
 		if ("u".equalsIgnoreCase(type)) {
 			if (args.length == 3) {
