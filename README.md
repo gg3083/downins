@@ -30,6 +30,14 @@ java -jar /path/to/jar i shortcode|url
 ```
 java -jar /path/to/jar c username|url maxFileInDir
 ```
+下载某个story下的全部文件
+```
+java -jar /path/to/jar _s storyid|url
+```
+下载某个用户的全部story文件
+```
+java -jar /path/to/jar ss username|url
+```
 打开配置面板(如果支持GUI)
 ```
 java -jar /path/to/jar s
@@ -48,3 +56,69 @@ java -jar /path/to/jar s threadNum=1
 |  proxyAddr  | 代理地址   |    
 | proxyPort   | 代理端口   |   
 | sid   | sessionid   |   
+
+
+**通过程序下载**
+
+```java
+// 设置ss代理、保存地址并保存
+Configure.get().getConfig().setProxyAddr("127.0.0.1").setProxyPort(1080).setLocation("d:/downins3").store();
+
+CloseableHttpClient client = Https.newHttpClient();
+InsParser ip = new InsParser(false, client);
+
+// 获取帖子的图片|视频访问地址
+PostInfo postInfo = ip.parsePost("帖子code");
+
+// 获取IGTV的访问地址
+PostInfo igtvInfo = ip.parseIGTV("IGTV_code");
+
+//根据id查询story中所有文件的访问地址
+Map<String,List<Url>> map = ip.parseStory(String ... ids);
+
+UserParser up = ip.newUserParser("用户名", false);
+// 分页浏览用户的全部帖子信息
+int pageSize = 12;
+UserPagingResult upr = up.paging("", pageSize);
+while (upr.isHasNextPage()) {
+    try {
+        Thread.sleep(1000);
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+    }
+    upr = up.paging(upr.getEndCursor(), pageSize);
+}
+
+//浏览用户的全部story(不包含story下面具体文件的访问地址)
+List<Story> stories = up.stories();
+
+TagParser tp = ip.newTagParser("陈钰琪可爱", false);
+// 分页浏览标签下的所有帖子
+TagPagingResult tpr = tp.paging("", pageSize);
+while (tpr.isHasNextPage()) {
+    try {
+        Thread.sleep(1000);
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+    }
+    tpr = tp.paging(tpr.getEndCursor(), pageSize);
+}
+
+// 浏览标签的热门帖子
+List<PagingItem> items = tp.tops();
+
+ChannelParser cp = ip.newChannelParser("用户名", false);
+// 分页浏览用户的IGTV
+ChannelPagingResult cpr = cp.paging("", pageSize);
+while (cpr.isHasNextPage()) {
+    try {
+        Thread.sleep(1000);
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+    }
+    cpr = cp.paging(cpr.getEndCursor(), pageSize);
+}
+
+//下载文件
+Https.download(client, HttpRequestBase req, Path dest, DownloadProgressNotify notify, Path temp);
+```
