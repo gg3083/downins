@@ -1,18 +1,13 @@
 package me.qyh.downinsrun.parser;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 
 import me.qyh.downinsrun.LogicException;
 import me.qyh.downinsrun.Utils;
@@ -22,15 +17,17 @@ import me.qyh.downinsrun.parser.Https.InvalidStateCodeException;
 import me.qyh.downinsrun.parser.InsParser.Url;
 
 public final class UserParser {
+
+	private static final String CHANNEL_URL = "https://www.instagram.com/%s/channel/";
+	private static final String CHANNEL_VARIABLES = "{\"id\":\"%s\",\"first\":%s,\"after\":\"%s\"}";
+
 	private static final String PAGING_VARIABLES = "{\"id\":\"%s\",\"first\":%s,\"after\":\"%s\"}";
 	private static final String STORIES_VARIABLES = "{\"user_id\":\"%s\",\"include_chaining\":true,\"include_reel\":true,\"include_suggested_users\":false,\"include_logged_out_extras\":false,\"include_highlight_reels\":true}";
 
 	private final String username;
 
-	private String queryId;
 	private String userId;
 	private String rhs;
-	private String storeQueryId;
 
 	@SuppressWarnings("unused")
 	private final boolean quiet;
@@ -62,6 +59,10 @@ public final class UserParser {
 		}
 
 		Document doc = Jsoup.parse(content);
+		if (doc.title().contains("Unavailable")) {
+			throw new LogicException("用户不存在");
+		}
+
 		Optional<String> sdop = InsParser.getSharedData(doc);
 		if (sdop.isPresent()) {
 			String json = sdop.get();
@@ -87,181 +88,118 @@ public final class UserParser {
 			throw new LogicException("设置查询参数失败");
 		}
 
-		Elements eles = doc.select("link[type=\"text/javascript\"]");
-		if (eles.isEmpty()) {
-			throw new LogicException("设置查询参数失败");
-		}
-
-		String queryIdJsUrl = null;
-
-		for (Element ele : eles) {
-			String href = ele.attr("href");
-			if (href.contains("ProfilePageContainer.js")) {
-				queryIdJsUrl = InsParser.URL_PREFIX + href;
-				break;
-			}
-		}
-
-		if (queryIdJsUrl == null) {
-			throw new LogicException("设置查询参数失败");
-		}
-
-		setQueryID(queryIdJsUrl);
-
-		if (queryId == null) {
-			throw new LogicException("设置查询参数queryId失败");
-		}
-
 		if (!quiet) {
 			System.out.println("设置查询参数成功");
 		}
 	}
 
-	private void setQueryID(String url) throws LogicException {
-		String content;
-		try {
-			content = Https.toString(client, url);
-		} catch (InvalidStateCodeException e) {
-			throw new RuntimeException("获取地址：" + url + "内容失败，响应码：" + e.getCode());
+	public PagingResult<IGTVItem> channelPaging(String after, int first) {
+		String variables = String.format(CHANNEL_VARIABLES, userId, first, after);
+		DowninsConfig config = Configure.get().getConfig();
+		ExpressionExecutor ee = GraphqlQuery.create().variables(variables)
+				.addParameter("query_hash", config.getChannelQueryHash()).appid(InsParser.X_IG_APP_ID)
+				.setReferer(String.format(CHANNEL_URL, username)).execute(client);
+		ExpressionExecutor channelExecutor = ee.executeForExecutor("data->user->edge_felix_video_timeline");
+		ExpressionExecutors ees = channelExecutor.executeForExecutors("edges");
+		if (ees.size() == 0) {
+			return new PagingResult<>(Collections.emptyList(), "", false, 0);
 		}
-		String[] storyQueryIds = Utils.substringsBetween(content, "const o=\"", "\"");
-		if (storyQueryIds.length == 0) {
-			throw new LogicException("获取story query id失败");
+		int count = channelExecutor.execute("count").map(Integer::parseInt).get();
+		boolean hasNextPage = channelExecutor.execute("page_info->has_next_page").map(Boolean::parseBoolean).get();
+		String endCursor = null;
+		if (hasNextPage) {
+			endCursor = channelExecutor.execute("page_info->end_cursor").get();
 		}
-		this.storeQueryId = storyQueryIds[0];
-		String[] queryIds = Utils.substringsBetween(content, "queryId:\"", "edge_owner_to_timeline_media");
-		if (queryIds.length == 0) {
-			throw new LogicException("获取 query id失败");
+		List<IGTVItem> items = new ArrayList<>();
+		for (ExpressionExecutor _ee : ees) {
+			ExpressionExecutor node = _ee.executeForExecutor("node");
+			IGTVItem item = new IGTVItem(node.execute("shortcode").get(),
+					Double.parseDouble(node.execute("video_duration").get()), node.execute("id").get(),
+					node.execute("thumbnail_src").get());
+			items.add(item);
 		}
-		for (String queryId : queryIds) {
-			int index = queryId.lastIndexOf("queryId");
-			if (index != -1) {
-				String hash = Utils.substringBetween(queryId.substring(index), "queryId:\"", "\"");
-				this.queryId = hash;
-				return;
-			}
-		}
-		throw new LogicException("获取 query id失败");
+		return new PagingResult<>(items, endCursor, hasNextPage, count);
 	}
 
-	public List<Story> stories() throws LogicException {
+	public List<Story> stories() {
 		String variables = String.format(STORIES_VARIABLES, this.userId);
-		URI uri;
-		try {
-			URIBuilder builder = new URIBuilder("https://www.instagram.com/graphql/query/");
-			uri = builder.addParameter("query_hash", this.storeQueryId).addParameter("variables", variables).build();
-		} catch (Exception e) {
-			throw new RuntimeException(e.getMessage(), e);
-		}
-		HttpGet get = new HttpGet(uri);
-		get.addHeader("referer", Utils.encodeUrl("https://www.instagram.com/" + this.username + "/"));
-		get.addHeader("user-agent", Https.USER_AGENT);
+		DowninsConfig config = Configure.get().getConfig();
+		ExpressionExecutor ee = GraphqlQuery.create().variables(variables)
+				.addParameter("query_hash", config.getStoriesQueryHash())
+				.setReferer("https://www.instagram.com/" + this.username + "/").execute(client);
+		ExpressionExecutors edges = ee.executeForExecutors("data->user->edge_highlight_reels->edges");
+		List<Story> stories = new ArrayList<>(edges.size());
+		for (ExpressionExecutor edge : edges) {
+			ExpressionExecutor node = edge.executeForExecutor("node");
 
-		String content;
-		try {
-			content = Https.toString(client, get);
-		} catch (InvalidStateCodeException e) {
-			throw new RuntimeException("获取地址：" + uri + "内容失败，响应码：" + e.getCode());
+			String thumb = node.execute("cover_media_cropped_thumbnail->url").get();
+			String id = node.execute("id").get();
+			stories.add(new Story(id, thumb));
 		}
 
-		ExpressionExecutor ee = Utils.readJson(content);
-		String status = ee.execute("status").orElse(null);
-		if ("ok".equals(status)) {
-
-			ExpressionExecutors edges = ee.executeForExecutors("data->user->edge_highlight_reels->edges");
-			List<Story> stories = new ArrayList<>(edges.size());
-			for (ExpressionExecutor edge : edges) {
-				ExpressionExecutor node = edge.executeForExecutor("node");
-
-				String thumb = node.execute("cover_media_cropped_thumbnail->url").get();
-				String id = node.execute("id").get();
-				stories.add(new Story(id, thumb));
-			}
-
-			return stories;
-		}
-		throw new LogicException("查询数据失败:" + content);
+		return stories;
 	}
 
-	public UserPagingResult paging(String after, int first) throws LogicException {
+	public PagingResult<ThumbPostInfo> paging(String after, int first) {
 		String variables = String.format(PAGING_VARIABLES, this.userId, first, after);
-		URI uri;
-		try {
-			URIBuilder builder = new URIBuilder("https://www.instagram.com/graphql/query/");
-			uri = builder.addParameter("query_hash", this.queryId).addParameter("variables", variables).build();
-		} catch (Exception e) {
-			throw new RuntimeException(e.getMessage(), e);
-		}
-		HttpGet get = new HttpGet(uri);
 		String md5 = Utils.doMd5(this.rhs + ":" + variables);
-		get.addHeader("x-instagram-gis", md5);
-		get.addHeader("referer", Utils.encodeUrl("https://www.instagram.com/" + this.username + "/"));
-		get.addHeader("user-agent", Https.USER_AGENT);
-
-		String content;
-		try {
-			content = Https.toString(client, get);
-		} catch (InvalidStateCodeException e) {
-			throw new RuntimeException("获取地址：" + uri + "内容失败，响应码：" + e.getCode());
+		DowninsConfig config = Configure.get().getConfig();
+		ExpressionExecutor ee = GraphqlQuery.create().variables(variables)
+				.addParameter("query_hash", config.getUserQueryHash()).addHeader("x-instagram-gis", md5)
+				.addHeader("referer", "https://www.instagram.com/" + this.username + "/").execute(client);
+		List<ThumbPostInfo> urls = new ArrayList<>();
+		ExpressionExecutor mediaExecutor = ee.executeForExecutor("data->user->edge_owner_to_timeline_media");
+		ExpressionExecutors ees = mediaExecutor.executeForExecutors("edges");
+		if (ees.size() == 0) {
+			return new PagingResult<>(Collections.emptyList(), "", false, 0);
 		}
-		ExpressionExecutor ee = Utils.readJson(content);
-		String status = ee.execute("status").orElse(null);
-		if ("ok".equals(status)) {
-			List<ThumbPostInfo> urls = new ArrayList<>();
-			ExpressionExecutor mediaExecutor = ee.executeForExecutor("data->user->edge_owner_to_timeline_media");
-			ExpressionExecutors ees = mediaExecutor.executeForExecutors("edges");
-			if (ees.size() == 0) {
-				return new UserPagingResult(Collections.emptyList(), "", false, 0);
-			}
-			int count = mediaExecutor.execute("count").map(Integer::parseInt).get();
-			boolean hasNextPage = mediaExecutor.execute("page_info->has_next_page").map(Boolean::parseBoolean).get();
-			String endCursor = null;
-			if (hasNextPage) {
-				endCursor = mediaExecutor.execute("page_info->end_cursor").get();
-			}
-			for (ExpressionExecutor _ee : ees) {
-				ExpressionExecutor node = _ee.executeForExecutor("node");
-				// edge_sidecar_to_children
-				String thumbUrl = node.execute("thumbnail_resources[1]->src").get();
-				String shortcode = node.execute("shortcode").get();
-				String type = node.execute("__typename").get();
-				String id = node.execute("id").get();
-				switch (type) {
-				case InsParser.GRAPH_SIDECAR:
-					ThumbPostInfo postInfo = new ThumbPostInfo(type, shortcode, id, thumbUrl);
-					ExpressionExecutors children = node.executeForExecutors("edge_sidecar_to_children->edges");
-					for (ExpressionExecutor child : children) {
-						ExpressionExecutor childNode = child.executeForExecutor("node");
-						String childType = childNode.execute("__typename").get();
-						switch (childType) {
-						case InsParser.GRAPH_VIDEO:
-							postInfo.addUrl(new Url(InsParser.GRAPH_VIDEO, childNode.execute("video_url").get()));
-							break;
-						case InsParser.GRAPH_IMAGE:
-							postInfo.addUrl(new Url(InsParser.GRAPH_IMAGE, childNode.execute("display_url").get()));
-							break;
-						default:
-							throw new RuntimeException("未知的类型:" + type);
-						}
+		int count = mediaExecutor.execute("count").map(Integer::parseInt).get();
+		boolean hasNextPage = mediaExecutor.execute("page_info->has_next_page").map(Boolean::parseBoolean).get();
+		String endCursor = null;
+		if (hasNextPage) {
+			endCursor = mediaExecutor.execute("page_info->end_cursor").get();
+		}
+		for (ExpressionExecutor _ee : ees) {
+			ExpressionExecutor node = _ee.executeForExecutor("node");
+			// edge_sidecar_to_children
+			String thumbUrl = node.execute("thumbnail_resources[1]->src").get();
+			String shortcode = node.execute("shortcode").get();
+			String type = node.execute("__typename").get();
+			String id = node.execute("id").get();
+			switch (type) {
+			case InsParser.GRAPH_SIDECAR:
+				ThumbPostInfo postInfo = new ThumbPostInfo(type, shortcode, id, thumbUrl);
+				ExpressionExecutors children = node.executeForExecutors("edge_sidecar_to_children->edges");
+				for (ExpressionExecutor child : children) {
+					ExpressionExecutor childNode = child.executeForExecutor("node");
+					String childType = childNode.execute("__typename").get();
+					switch (childType) {
+					case InsParser.GRAPH_VIDEO:
+						postInfo.addUrl(new Url(InsParser.GRAPH_VIDEO, childNode.execute("video_url").get()));
+						break;
+					case InsParser.GRAPH_IMAGE:
+						postInfo.addUrl(new Url(InsParser.GRAPH_IMAGE, childNode.execute("display_url").get()));
+						break;
+					default:
+						throw new RuntimeException("未知的类型:" + type);
 					}
-					urls.add(postInfo);
-					break;
-				case InsParser.GRAPH_VIDEO:
-					ThumbPostInfo info = new ThumbPostInfo(type, shortcode, id, thumbUrl);
-					info.addUrl(new Url(InsParser.GRAPH_VIDEO, node.execute("video_url").get()));
-					urls.add(info);
-					break;
-				case InsParser.GRAPH_IMAGE:
-					ThumbPostInfo info2 = new ThumbPostInfo(type, shortcode, id, thumbUrl);
-					info2.addUrl(new Url(InsParser.GRAPH_IMAGE, node.execute("display_url").get()));
-					urls.add(info2);
-					break;
-				default:
-					throw new RuntimeException("未知的类型:" + type);
 				}
+				urls.add(postInfo);
+				break;
+			case InsParser.GRAPH_VIDEO:
+				ThumbPostInfo info = new ThumbPostInfo(type, shortcode, id, thumbUrl);
+				info.addUrl(new Url(InsParser.GRAPH_VIDEO, node.execute("video_url").get()));
+				urls.add(info);
+				break;
+			case InsParser.GRAPH_IMAGE:
+				ThumbPostInfo info2 = new ThumbPostInfo(type, shortcode, id, thumbUrl);
+				info2.addUrl(new Url(InsParser.GRAPH_IMAGE, node.execute("display_url").get()));
+				urls.add(info2);
+				break;
+			default:
+				throw new RuntimeException("未知的类型:" + type);
 			}
-			return new UserPagingResult(urls, endCursor, hasNextPage, count);
 		}
-		throw new LogicException("查询数据失败:" + content);
+		return new PagingResult<>(urls, endCursor, hasNextPage, count);
 	}
 }

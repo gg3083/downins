@@ -15,6 +15,9 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
+import me.qyh.downinsrun.parser.Configure;
+import me.qyh.downinsrun.parser.DowninsConfig;
+
 class SettingFrame extends JFrame {
 
 	/**

@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 
+import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.Https;
 import me.qyh.downinsrun.parser.InsParser;
 import me.qyh.downinsrun.parser.InsParser.Url;
@@ -116,6 +117,7 @@ class DownloadSS {
 			System.out.println(e.getMessage());
 			System.exit(-1);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			System.out.println("初始化用户解析器失败");
 			System.exit(-1);
 		}

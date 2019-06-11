@@ -22,11 +22,13 @@ import java.util.stream.Stream;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 
+import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.Https;
 import me.qyh.downinsrun.parser.InsParser;
 import me.qyh.downinsrun.parser.InsParser.Url;
+import me.qyh.downinsrun.parser.PagingResult;
 import me.qyh.downinsrun.parser.PostInfo;
-import me.qyh.downinsrun.parser.UserPagingResult;
+import me.qyh.downinsrun.parser.ThumbPostInfo;
 import me.qyh.downinsrun.parser.UserParser;
 
 /**
@@ -236,6 +238,7 @@ class DownloadU {
 			System.out.println(e.getMessage());
 			System.exit(-1);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			System.out.println("初始化用户解析器失败");
 			System.exit(-1);
 		}
@@ -244,13 +247,11 @@ class DownloadU {
 	}
 
 	private void execute(UserParser up, String after) {
-		UserPagingResult result = null;
+		PagingResult<ThumbPostInfo> result = null;
 		try {
 			result = up.paging(after, first);
-		} catch (LogicException e) {
-			System.out.println(e.getMessage());
-			System.exit(-1);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			System.out.println("获取用户帖子列表失败");
 			System.exit(-1);
 		}

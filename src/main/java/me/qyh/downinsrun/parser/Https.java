@@ -1,17 +1,19 @@
 package me.qyh.downinsrun.parser;
 
-import java.io.BufferedReader;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -20,12 +22,29 @@ import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.jsoup.UncheckedIOException;
 
-import me.qyh.downinsrun.Configure;
 import me.qyh.downinsrun.DowninsCookieStore;
 import me.qyh.downinsrun.DowninsHttpRoutePlanner;
 
 public class Https {
+
+	private static final ResponseHandler<String> stringHandler = new ResponseHandler<String>() {
+
+		@Override
+		public String handleResponse(HttpResponse response) throws ClientProtocolException, IOException {
+			HttpEntity entity = response.getEntity();
+			if (entity == null) {
+				throw new IllegalStateException("没有响应内容");
+			}
+			String content = EntityUtils.toString(entity);
+			int statusCode = response.getStatusLine().getStatusCode();
+			if (statusCode >= 300) {
+				throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode, content);
+			}
+			return content;
+		}
+	};
 
 	public static CloseableHttpClient newHttpClient() {
 		CloseableHttpClient client = HttpClients.custom()
@@ -41,51 +60,40 @@ public class Https {
 	public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36";
 
 	public static String toString(CloseableHttpClient client, HttpRequestBase req) throws InvalidStateCodeException {
-		return toString(client, req, 30);
+		return toString(client, req, 30, 0);
 	}
 
 	public static String toString(CloseableHttpClient client, String url) throws InvalidStateCodeException {
 		HttpGet get = new HttpGet(url);
 		get.addHeader("user-agent", USER_AGENT);
-		return toString(client, get, 30);
+		return toString(client, get, 30, 0);
 	}
 
-	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec)
+	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec, int times)
 			throws InvalidStateCodeException {
-		try (CloseableHttpResponse response = client.execute(req)) {
-			int statusCode = response.getStatusLine().getStatusCode();
-			if (statusCode != 200) {
-				if (statusCode == 429) {
-					try {
-						System.out.println("服务:" + req.getURI() + "请求失败：客户端请求太多，" + sec + "s后再次尝试");
-						Thread.sleep(sec * 1000);
-						return toString(client, req, sec + 30);
-					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
-						throw new RuntimeException(e);
-					}
-				}
-				throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode);
-			}
-			HttpEntity entity = response.getEntity();
-			if (entity == null) {
-				throw new IllegalStateException("没有响应内容");
-			}
-			String line;
-			StringBuilder sb = new StringBuilder();
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(entity.getContent()))) {
-				while ((line = reader.readLine()) != null)
-					sb.append(line);
-			}
-			EntityUtils.consumeQuietly(entity);
-			return sb.toString();
+		try {
+			return client.execute(req, stringHandler);
 		} catch (InvalidStateCodeException e) {
+			if (e.getCode() == 429) {
+				try {
+					System.out.println("服务:" + req.getURI() + "请求失败：客户端请求太多，" + sec + "s后再次尝试");
+					Thread.sleep(sec * 1000);
+					return toString(client, req, sec + 30, times);
+				} catch (InterruptedException e1) {
+					Thread.currentThread().interrupt();
+					throw new RuntimeException(e1);
+				}
+			}
 			throw e;
 		} catch (IOException e) {
-			throw new RuntimeException("获取地址：" + req.getURI() + "内容失败", e);
+			if (times == 3) {
+				throw new UncheckedIOException(e);
+			}
+			return toString(client, req, sec, times + 1);
 		} finally {
 			req.releaseConnection();
 		}
+
 	}
 
 	public static void download(CloseableHttpClient client, HttpRequestBase get, Path dest,
@@ -97,22 +105,11 @@ public class Https {
 			System.out.println("文件" + dest + "已经存在");
 			return;
 		}
-		DownloadProgress progress = null;
 		Path temp = null;
 		try (CloseableHttpResponse resp = client.execute(get)) {
 			int statusCode = resp.getStatusLine().getStatusCode();
-			if (statusCode != 200) {
-				if (statusCode == 429) {
-					try {
-						System.out.println("下载请求失败：客户端请求太多，10s后再次尝试");
-						Thread.sleep(10 * 1000);
-						download(client, get, dest, notify, tempDir);
-					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
-						throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode);
-					}
-				}
-				throw new InvalidStateCodeException(statusCode, "异常状态码:" + statusCode);
+			if (statusCode >= 300) {
+				throw new InvalidStateCodeException(statusCode, "异常状态码:" + statusCode, null);
 			}
 			HttpEntity entity = resp.getEntity();
 			if (entity == null) {
@@ -121,24 +118,34 @@ public class Https {
 
 			temp = Files.createTempFile(tempDir, null, ".tmp");
 
-			if (notify != null)
-				progress = new DownloadProgress(entity.getContentLength(), temp, notify);
-
-			try (InputStream is = entity.getContent()) {
-				Files.copy(is, temp, StandardCopyOption.REPLACE_EXISTING);
+			double fileSize = entity.getContentLength();
+			if (notify != null) {
+				double totalDataRead = 0;
+				try (InputStream in = entity.getContent();
+						OutputStream fos = Files.newOutputStream(temp);
+						BufferedOutputStream bout = new BufferedOutputStream(fos, 1024)) {
+					byte[] data = new byte[1024];
+					int i;
+					while ((i = in.read(data, 0, 1024)) >= 0) {
+						totalDataRead = totalDataRead + i;
+						bout.write(data, 0, i);
+						BigDecimal bd = new BigDecimal((totalDataRead * 100) / fileSize);
+						bd = bd.setScale(2, RoundingMode.HALF_DOWN);
+						notify.notify(dest, bd.doubleValue());
+					}
+				}
+				notify.notify(dest, 100D);
+			} else {
+				try (InputStream is = entity.getContent()) {
+					Files.copy(is, temp, StandardCopyOption.REPLACE_EXISTING);
+				}
 			}
 
 			Files.move(temp, dest, StandardCopyOption.ATOMIC_MOVE);
 
 			EntityUtils.consumeQuietly(entity);
 
-			if (progress != null) {
-				notify.notify(dest, 100D);
-			}
-
 		} finally {
-			if (progress != null)
-				progress.shutdown();
 			get.releaseConnection();
 			if (temp != null)
 				try {
@@ -154,14 +161,20 @@ public class Https {
 		 */
 		private static final long serialVersionUID = 1L;
 		private final int code;
+		private String content;
 
-		public InvalidStateCodeException(int code, String msg) {
+		public InvalidStateCodeException(int code, String msg, String content) {
 			super(msg);
 			this.code = code;
+			this.content = content;
 		}
 
 		public int getCode() {
 			return code;
+		}
+
+		public String getContent() {
+			return content;
 		}
 
 	}
@@ -169,37 +182,4 @@ public class Https {
 	public static interface DownloadProgressNotify {
 		public void notify(Path dest, double percent);
 	}
-
-	public static final class DownloadProgress {
-		private final ScheduledExecutorService ses;
-
-		public DownloadProgress(long contentLength, Path p, DownloadProgressNotify notify) {
-			if (contentLength > 0) {
-				ses = Executors.newSingleThreadScheduledExecutor();
-				ses.scheduleAtFixedRate(() -> {
-					long size;
-					try {
-						size = Files.size(p);
-					} catch (Exception e) {
-						size = 0;
-					}
-					double pct = Math.floor(size * 100 / contentLength);
-					if (size == contentLength) {
-						ses.shutdownNow();
-					}
-					notify.notify(p, pct);
-				}, 100, 100, TimeUnit.MILLISECONDS);
-			} else {
-				ses = null;
-			}
-		}
-
-		public void shutdown() {
-			if (ses != null && !ses.isShutdown()) {
-				ses.shutdownNow();
-			}
-
-		}
-	}
-
 }

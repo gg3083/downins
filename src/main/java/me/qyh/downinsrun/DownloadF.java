@@ -18,6 +18,7 @@ import com.google.gson.JsonObject;
 
 import me.qyh.downinsrun.Utils.ExpressionExecutor;
 import me.qyh.downinsrun.Utils.ExpressionExecutors;
+import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.Https;
 import me.qyh.downinsrun.parser.Https.DownloadProgressNotify;
 import me.qyh.downinsrun.parser.Https.InvalidStateCodeException;
@@ -123,7 +124,8 @@ public class DownloadF {
 							return;
 						}
 
-						if (code == 403 && shortcode != null && !shortcode.isEmpty()) {
+						if ((code == 403 || code == 410) && shortcode != null && !shortcode.isEmpty()) {
+							System.out.println("parse post");
 							try {
 								PostInfo pi = parser.parsePost(shortcode);
 								Thread.sleep(1000);
@@ -147,6 +149,7 @@ public class DownloadF {
 					obj.addProperty("url", url);
 					obj.addProperty("shortcode", shortcode);
 					obj.addProperty("location", dest.toString());
+					obj.addProperty("index", index);
 					errors.add(obj);
 				}
 			});

@@ -10,6 +10,9 @@ import org.apache.http.impl.conn.DefaultRoutePlanner;
 import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 
+import me.qyh.downinsrun.parser.Configure;
+import me.qyh.downinsrun.parser.DowninsConfig;
+
 public class DowninsHttpRoutePlanner implements HttpRoutePlanner {
 
 	private DefaultRoutePlanner drp = new DefaultRoutePlanner(DefaultSchemePortResolver.INSTANCE);

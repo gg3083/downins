@@ -29,11 +29,12 @@ import com.google.gson.JsonObject;
 
 import me.qyh.downinsrun.Utils.ExpressionExecutor;
 import me.qyh.downinsrun.Utils.ExpressionExecutors;
+import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.Https;
 import me.qyh.downinsrun.parser.InsParser;
 import me.qyh.downinsrun.parser.InsParser.Url;
 import me.qyh.downinsrun.parser.PagingItem;
-import me.qyh.downinsrun.parser.TagPagingResult;
+import me.qyh.downinsrun.parser.PagingResult;
 import me.qyh.downinsrun.parser.TagParser;
 
 /**
@@ -264,6 +265,7 @@ class DownloadT {
 			System.out.println(e.getMessage());
 			System.exit(-1);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			System.out.println("初始化标签解析器失败");
 			System.exit(-1);
 		}
@@ -271,13 +273,11 @@ class DownloadT {
 	}
 
 	private void execute(TagParser tp, String after) {
-		TagPagingResult result = null;
+		PagingResult<PagingItem> result = null;
 		try {
 			result = tp.paging(after, first);
-		} catch (LogicException e) {
-			System.out.println(e.getMessage());
-			System.exit(-1);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			System.out.println("获取标签帖子列表失败");
 			System.exit(-1);
 		}

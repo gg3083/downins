@@ -9,7 +9,11 @@ import java.util.Optional;
 
 import javax.swing.SwingUtilities;
 
+import me.qyh.downinsrun.parser.Configure;
+import me.qyh.downinsrun.parser.DowninsConfig;
 import me.qyh.downinsrun.parser.InsParser;
+import me.qyh.downinsrun.parser.QueryHashQuery;
+import me.qyh.downinsrun.parser.QueryHashQuery.QueryHash;
 
 public class Downloader {
 
@@ -37,6 +41,7 @@ public class Downloader {
 			System.out.println("_s storyid|url 根据storyid或者story地址下载story全部文件");
 			System.out.println("ss username|url 根据用户名或者用户主页地址下载用户的全部story文件");
 			System.out.println("s 开启一个设置面板(如果支持GUI)");
+			System.out.println("h 设置query_hash");
 			System.exit(0);
 		}
 		String type = args[0];
@@ -46,6 +51,11 @@ public class Downloader {
 
 			if (type.equalsIgnoreCase("s")) {
 				processSetting(args);
+				return;
+			}
+
+			if (type.equalsIgnoreCase("h")) {
+				processQueryHash();
 				return;
 			}
 			prtError("无效的类型，只支持用户|帖子|标签|IGTV|channel的下载");
@@ -135,7 +145,8 @@ public class Downloader {
 		System.exit(0);
 	}
 
-	private static final String[] VALID_KEYS = { "threadNum", "location", "proxyPort", "proxyAddr", "sid" };
+	private static final String[] VALID_KEYS = { "threadNum", "location", "proxyPort", "proxyAddr", "sid",
+			"storyQueryHash", "channelQueryHash", "userQueryHash", "storiesQueryHash", "tagQueryHash", "appid" };
 	private static final StringBuilder validKeysString = new StringBuilder();
 
 	static {
@@ -154,18 +165,25 @@ public class Downloader {
 		return false;
 	}
 
+	private static void processQueryHash() {
+		QueryHash hash = QueryHashQuery.get().getHash();
+		System.out.println("开始保存在配置文件中");
+		DowninsConfig config = Configure.get().getConfig();
+		config.setChannelQueryHash(hash.getChannelQueryHash());
+		config.setStoriesQueryHash(hash.getStoriesQueryHash());
+		config.setStoryQueryHash(hash.getStoryQueryHash());
+		config.setTagQueryHash(hash.getTagQueryHash());
+		config.setUserQueryHash(hash.getUserQueryHash());
+		System.out.println("保存成功");
+		System.exit(0);
+	}
+
 	private static void processSetting(String[] args) {
 		if (GraphicsEnvironment.isHeadless()) {
 			if (args.length == 1) {
 				System.exit(0);
 			}
-			DowninsConfig config = new DowninsConfig();
-
-			boolean setThreadNum = false;
-			boolean setLocation = false;
-			boolean setProxyAddr = false;
-			boolean setProxyPort = false;
-			boolean setSid = false;
+			DowninsConfig prev = Configure.get().getConfig();
 
 			for (int i = 1; i < args.length; i++) {
 				String arg = args[i];
@@ -181,55 +199,37 @@ public class Downloader {
 				}
 
 				if (key.equalsIgnoreCase("threadNum")) {
-					setThreadNum = true;
 					try {
-						config.setThreadNum(Integer.parseInt(value));
+						prev.setThreadNum(Integer.parseInt(value));
 					} catch (NumberFormatException e) {
 						prtError("下载线程数必须为数字");
 					}
 				}
 
 				if (key.equalsIgnoreCase("sid")) {
-					setSid = true;
-					config.setSid(value);
+					prev.setSid(value);
 				}
 
 				if (key.equalsIgnoreCase("location")) {
-					setLocation = true;
-					config.setLocation(value);
+					prev.setLocation(value);
 				}
 
 				if (key.equalsIgnoreCase("proxyAddr")) {
-					setProxyAddr = true;
-					config.setProxyAddr(value);
+					prev.setProxyAddr(value);
 				}
 
 				if (key.equalsIgnoreCase("proxyPort")) {
-					setProxyPort = true;
 					if (!value.isEmpty()) {
 						try {
-							config.setProxyPort(Integer.parseInt(value));
+							prev.setProxyPort(Integer.parseInt(value));
 						} catch (NumberFormatException e) {
 							prtError("代理端口必须为数字");
 						}
 					}
 				}
-
-				DowninsConfig prev = Configure.get().getConfig();
-				if (!setLocation)
-					config.setLocation(prev.getLocation());
-				if (!setProxyAddr)
-					config.setProxyAddr(prev.getProxyAddr());
-				if (!setProxyPort)
-					config.setProxyPort(prev.getProxyPort());
-				if (!setSid)
-					config.setSid(prev.getSid());
-				if (!setThreadNum)
-					config.setThreadNum(prev.getThreadNum());
-
 			}
 			try {
-				Configure.get().store(config);
+				Configure.get().store(prev);
 			} catch (LogicException e) {
 				prtError(e.getMessage());
 			} catch (IOException e) {

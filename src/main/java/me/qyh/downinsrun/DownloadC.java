@@ -28,12 +28,13 @@ import com.google.gson.JsonObject;
 
 import me.qyh.downinsrun.Utils.ExpressionExecutor;
 import me.qyh.downinsrun.Utils.ExpressionExecutors;
-import me.qyh.downinsrun.parser.ChannelPagingResult;
-import me.qyh.downinsrun.parser.ChannelParser;
+import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.Https;
 import me.qyh.downinsrun.parser.IGTVItem;
 import me.qyh.downinsrun.parser.InsParser;
 import me.qyh.downinsrun.parser.InsParser.Url;
+import me.qyh.downinsrun.parser.PagingResult;
+import me.qyh.downinsrun.parser.UserParser;
 
 /**
  * channel下载
@@ -256,27 +257,26 @@ class DownloadC {
 	 * 
 	 */
 	private void execute(String after) {
-		ChannelParser tp = null;
+		UserParser tp = null;
 		try {
-			tp = parser.newChannelParser(username, false);
+			tp = parser.newUserParser(username, false);
 		} catch (LogicException e) {
 			System.out.println(e.getMessage());
 			System.exit(-1);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			System.out.println("初始化标签解析器失败");
 			System.exit(-1);
 		}
 		execute(tp, after);
 	}
 
-	private void execute(ChannelParser tp, String after) {
-		ChannelPagingResult result = null;
+	private void execute(UserParser tp, String after) {
+		PagingResult<IGTVItem> result = null;
 		try {
-			result = tp.paging(after, first);
-		} catch (LogicException e) {
-			System.out.println(e.getMessage());
-			System.exit(-1);
+			result = tp.channelPaging(after, first);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			System.out.println("获取标签帖子列表失败");
 			System.exit(-1);
 		}

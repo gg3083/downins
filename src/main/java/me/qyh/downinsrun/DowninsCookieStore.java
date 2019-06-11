@@ -16,6 +16,8 @@ import org.apache.http.cookie.Cookie;
 import org.apache.http.cookie.CookieIdentityComparator;
 import org.apache.http.impl.cookie.BasicClientCookie;
 
+import me.qyh.downinsrun.parser.Configure;
+
 public class DowninsCookieStore implements CookieStore, Serializable {
 
 	/**

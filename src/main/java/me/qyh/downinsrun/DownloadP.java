@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 
+import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.Https;
 import me.qyh.downinsrun.parser.Https.DownloadProgressNotify;
 import me.qyh.downinsrun.parser.InsParser;
