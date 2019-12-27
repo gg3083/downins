@@ -57,15 +57,15 @@ public class QueryHashQuery {
 		System.out.println("开始连接地址:" + USER_URL);
 		Document doc = Jsoup.parse(quietlyGetSource(USER_URL));
 		System.out.println("成功获取地址内容");
-		System.out.println("开始获取user query_hash");
+		System.out.println("开始设置user query_hash");
 		hash.userQueryHash = getUserQueryHash(doc);
-		System.out.println("开始获取channel query_hash");
+		System.out.println("开始设置channel query_hash");
 		hash.channelQueryHash = getChannelQueryHash(doc);
-		System.out.println("开始获取stories query_hash");
+		System.out.println("开始设置stories query_hash");
 		hash.storiesQueryHash = getStoriesQueryHash(doc);
-		System.out.println("开始获取story query_hash");
+		System.out.println("开始设置story query_hash");
 		hash.storyQueryHash = getStoryQueryHash(doc, hash.storiesQueryHash);
-		System.out.println("开始获取tag query_hash");
+		System.out.println("开始设置tag query_hash");
 		hash.tagQueryHash = getTagQueryHash();
 
 		return hash;
@@ -105,7 +105,7 @@ public class QueryHashQuery {
 				System.out.println("开始尝试query_hash:" + queryId);
 				GraphqlQuery.create().appid(APP_ID).queryHash(queryId).addHeader("x-instagram-gis", md5)
 						.variables(TAG_VARIABLES).execute(client);
-				System.out.println("获取tag query_hash成功:" + queryId);
+				System.out.println("设置tag query_hash成功:" + queryId);
 				return queryId;
 			} catch (Exception e) {
 				System.out.println("query_hash:" + queryId + "尝试失败，尝试下一个");
@@ -113,8 +113,7 @@ public class QueryHashQuery {
 			}
 		}
 
-		System.out.println("获取tag query_hash失败");
-		return null;
+		throw new RuntimeException("设置tag query_hash失败");
 	}
 
 	private String getUserQueryHash(Document doc) {
@@ -147,20 +146,16 @@ public class QueryHashQuery {
 		for (String queryId : userQueryIdList) {
 			try {
 				System.out.println("开始尝试query_hash:" + queryId);
-				ExpressionExecutor ee = GraphqlQuery.create().variables(USER_VARIABLES).appid(APP_ID).queryHash(queryId)
+				GraphqlQuery.create().variables(USER_VARIABLES).appid(APP_ID).queryHash(queryId)
 						.addHeader("x-instagram-gis", md5).execute(client);
-				boolean valid = !ee.execute("data->user->edge_owner_to_timeline_media").isEmpty();
-				if (!valid)
-					continue;
-				System.out.println("获取user query_hash成功:" + queryId);
+				System.out.println("设置user query_hash成功:" + queryId);
 				return queryId;
 			} catch (Exception e) {
 				System.out.println("query_hash:" + queryId + "尝试失败，尝试下一个");
 				sleep();
 			}
 		}
-		System.out.println("获取user query_hash失败");
-		return null;
+		throw new RuntimeException("设置user query_hash失败");
 	}
 
 	private String getChannelQueryHash(Document doc) {
@@ -187,11 +182,8 @@ public class QueryHashQuery {
 		for (String queryId : channelQueryIdList) {
 			System.out.println("开始尝试query_hash:" + queryId);
 			try {
-				ExpressionExecutor ee = GraphqlQuery.create().variables(CHANNEL_VARIABLES).appid(APP_ID)
-						.queryHash(queryId).execute(client);
-				if (ee.execute("data->user->edge_felix_video_timeline").isEmpty())
-					continue;
-				System.out.println("获取channel query_hash成功:" + queryId);
+				GraphqlQuery.create().variables(CHANNEL_VARIABLES).appid(APP_ID).queryHash(queryId).execute(client);
+				System.out.println("设置channel query_hash成功:" + queryId);
 				return queryId;
 			} catch (Exception e) {
 				System.out.println("query_hash:" + queryId + "尝试失败，尝试下一个");
@@ -199,8 +191,7 @@ public class QueryHashQuery {
 			}
 		}
 
-		System.out.println("获取channel query_hash失败");
-		return null;
+		throw new RuntimeException("设置channel query_hash失败");
 	}
 
 	private String getStoriesQueryHash(Document doc) {
@@ -230,19 +221,15 @@ public class QueryHashQuery {
 		for (String queryId : queryIdList) {
 			System.out.println("开始尝试query_hash:" + queryId);
 			try {
-				ExpressionExecutor ee = GraphqlQuery.create().appid(APP_ID).queryHash(queryId)
-						.variables(STORIES_VARIABLES).execute(client);
-				if (ee.execute("data->user->edge_highlight_reels").isEmpty())
-					continue;
-				System.out.println("获取stories query_hash成功:" + queryId);
+				GraphqlQuery.create().appid(APP_ID).queryHash(queryId).variables(STORIES_VARIABLES).execute(client);
+				System.out.println("设置stories query_hash成功:" + queryId);
 				return queryId;
 			} catch (Exception e) {
 				System.out.println("query_hash:" + queryId + "尝试失败，尝试下一个");
 				sleep();
 			}
 		}
-		System.out.println("获取stories query_hash失败");
-		return null;
+		throw new RuntimeException("设置stories query_hash失败");
 	}
 
 	private String getStoryQueryHash(Document doc, String storiesQueryHash) {
@@ -278,20 +265,15 @@ public class QueryHashQuery {
 		for (String queryId : queryIdList) {
 			System.out.println("开始尝试query_hash:" + queryId);
 			try {
-				ExpressionExecutor storyee = GraphqlQuery.create().appid(APP_ID).queryHash(queryId).variables(variables)
-						.execute(client);
-				if (storyee.execute("data->reels_media").isEmpty()) {
-					continue;
-				}
-				System.out.println("获取story query_hash成功:" + queryId);
+				GraphqlQuery.create().appid(APP_ID).queryHash(queryId).variables(variables).execute(client);
+				System.out.println("设置story query_hash成功:" + queryId);
 				return queryId;
 			} catch (Exception e) {
 				System.out.println("query_hash:" + queryId + "尝试失败，尝试下一个");
 				sleep();
 			}
 		}
-		System.out.println("获取story query_hash失败");
-		return null;
+		throw new RuntimeException("设置story query_hash失败");
 	}
 
 	private List<String> getQueryIds(String content) {
@@ -397,4 +379,5 @@ public class QueryHashQuery {
 					+ channelQueryHash + "]";
 		}
 	}
+
 }

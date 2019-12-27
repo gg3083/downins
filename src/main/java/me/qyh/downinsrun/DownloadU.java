@@ -251,11 +251,7 @@ class DownloadU {
 		try {
 			result = up.paging(after, first);
 		} catch (Throwable e) {
-			if(e instanceof LogicException) {
-				System.out.println(e.getMessage());
-			} else {
-				e.printStackTrace();
-			}
+			e.printStackTrace();
 			System.out.println("获取用户帖子列表失败");
 			System.exit(-1);
 		}
@@ -454,4 +450,5 @@ class DownloadU {
 			return v;
 		}
 	}
+
 }

@@ -72,7 +72,6 @@ public class Https {
 	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec, int times)
 			throws InvalidStateCodeException {
 		try {
-			req.addHeader("user-agent", USER_AGENT);
 			return client.execute(req, stringHandler);
 		} catch (InvalidStateCodeException e) {
 			if (e.getCode() == 429) {

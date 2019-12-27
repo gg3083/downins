@@ -6,6 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -15,6 +18,7 @@ import com.google.gson.JsonObject;
 
 import me.qyh.downinsrun.Utils.ExpressionExecutor;
 import me.qyh.downinsrun.Utils.ExpressionExecutors;
+import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.Https;
 import me.qyh.downinsrun.parser.Https.DownloadProgressNotify;
 import me.qyh.downinsrun.parser.Https.InvalidStateCodeException;
@@ -92,59 +96,71 @@ public class DownloadF {
 			return;
 		}
 		System.out.println("开始下载失败文件");
+		ExecutorService es = Executors
+				.newFixedThreadPool(Math.min(executors.size(), Configure.get().getConfig().getThreadNum()));
 		JsonArray errors = new JsonArray();
 		for (ExpressionExecutor executor : executors) {
 			if (executor.isNull()) {
 				continue;
 			}
-			String url = executor.execute("url").get();
-			Path dest = Paths.get(executor.execute("location").get());
-			String shortcode = executor.execute("shortcode").orElse(null);
-			int index = executor.execute("index").map(Integer::parseInt).get();
-			HttpGet get = new HttpGet(url);
-			get.addHeader("user-agent", Https.USER_AGENT);
+			es.execute(() -> {
+				String url = executor.execute("url").get();
+				Path dest = Paths.get(executor.execute("location").get());
+				String shortcode = executor.execute("shortcode").orElse(null);
+				int index = executor.execute("index").map(Integer::parseInt).get();
+				HttpGet get = new HttpGet(url);
+				get.addHeader("user-agent", Https.USER_AGENT);
 
-			System.out.println("开始下载文件:" + url);
-			try {
-				Https.download(client, get, dest, null, tempDir);
-				System.out.println(url + "下载成功，存放位置:" + dest);
-			} catch (Throwable e) {
-				if (e instanceof InvalidStateCodeException) {
-					InvalidStateCodeException isce = (InvalidStateCodeException) e;
-					int code = isce.getCode();
-					if (code == 404) {
-						System.out.println(url + "对应的文件不存在");
-						return;
-					}
-
-					if ((code == 403 || code == 410) && shortcode != null && !shortcode.isEmpty()) {
-						System.out.println("parse post");
-						try {
-							PostInfo pi = parser.parsePost(shortcode);
-							Thread.sleep(1000);
-							Url now = pi.getUrls().get(index - 1);
-							HttpGet get2 = new HttpGet(now.getValue());
-							get2.addHeader("user-agent", Https.USER_AGENT);
-							Https.download(client, get2, dest, null, tempDir);
-							return;
-						} catch (Throwable e2) {
-						}
-					}
-
-				}
-				System.out.println(url + "下载失败！！！");
+				System.out.println("开始下载文件:" + url);
 				try {
-					Files.deleteIfExists(dest);
-				} catch (IOException e1) {
-				}
+					Https.download(client, get, dest, null, tempDir);
+					System.out.println(url + "下载成功，存放位置:" + dest);
+				} catch (Throwable e) {
+					if (e instanceof InvalidStateCodeException) {
+						InvalidStateCodeException isce = (InvalidStateCodeException) e;
+						int code = isce.getCode();
+						if (code == 404) {
+							System.out.println(url + "对应的文件不存在");
+							return;
+						}
 
-				JsonObject obj = new JsonObject();
-				obj.addProperty("url", url);
-				obj.addProperty("shortcode", shortcode);
-				obj.addProperty("location", dest.toString());
-				obj.addProperty("index", index);
-				errors.add(obj);
-			}
+						if ((code == 403 || code == 410) && shortcode != null && !shortcode.isEmpty()) {
+							System.out.println("parse post");
+							try {
+								PostInfo pi = parser.parsePost(shortcode);
+								Thread.sleep(1000);
+								Url now = pi.getUrls().get(index - 1);
+								HttpGet get2 = new HttpGet(now.getValue());
+								get2.addHeader("user-agent", Https.USER_AGENT);
+								Https.download(client, get2, dest, null, tempDir);
+								return;
+							} catch (Throwable e2) {
+							}
+						}
+
+					}
+					System.out.println(url + "下载失败！！！");
+					try {
+						Files.deleteIfExists(dest);
+					} catch (IOException e1) {
+					}
+
+					JsonObject obj = new JsonObject();
+					obj.addProperty("url", url);
+					obj.addProperty("shortcode", shortcode);
+					obj.addProperty("location", dest.toString());
+					obj.addProperty("index", index);
+					errors.add(obj);
+				}
+			});
+		}
+
+		es.shutdown();
+		try {
+			es.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+		} catch (InterruptedException e1) {
+			System.out.println("下载失败文件失败");
+			System.exit(-1);
 		}
 
 		try (Writer writer = Files.newBufferedWriter(errorF, StandardCharsets.UTF_8)) {

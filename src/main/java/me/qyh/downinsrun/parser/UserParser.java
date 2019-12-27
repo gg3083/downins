@@ -97,7 +97,7 @@ public final class UserParser {
 		String variables = String.format(CHANNEL_VARIABLES, userId, first, after);
 		DowninsConfig config = Configure.get().getConfig();
 		ExpressionExecutor ee = GraphqlQuery.create().variables(variables)
-				.addParameter("query_hash", config.getCurrentChannelQueryHash()).appid(InsParser.X_IG_APP_ID)
+				.addParameter("query_hash", config.getChannelQueryHash()).appid(InsParser.X_IG_APP_ID)
 				.setReferer(String.format(CHANNEL_URL, username)).execute(client);
 		ExpressionExecutor channelExecutor = ee.executeForExecutor("data->user->edge_felix_video_timeline");
 		ExpressionExecutors ees = channelExecutor.executeForExecutors("edges");
@@ -125,7 +125,7 @@ public final class UserParser {
 		String variables = String.format(STORIES_VARIABLES, this.userId);
 		DowninsConfig config = Configure.get().getConfig();
 		ExpressionExecutor ee = GraphqlQuery.create().variables(variables)
-				.addParameter("query_hash", config.getCurrentStoriesQueryHash())
+				.addParameter("query_hash", config.getStoriesQueryHash())
 				.setReferer("https://www.instagram.com/" + this.username + "/").execute(client);
 		ExpressionExecutors edges = ee.executeForExecutors("data->user->edge_highlight_reels->edges");
 		List<Story> stories = new ArrayList<>(edges.size());
@@ -145,7 +145,7 @@ public final class UserParser {
 		String md5 = Utils.doMd5(this.rhs + ":" + variables);
 		DowninsConfig config = Configure.get().getConfig();
 		ExpressionExecutor ee = GraphqlQuery.create().variables(variables)
-				.addParameter("query_hash", config.getCurrentUserQueryHash()).addHeader("x-instagram-gis", md5)
+				.addParameter("query_hash", config.getUserQueryHash()).addHeader("x-instagram-gis", md5)
 				.addHeader("referer", "https://www.instagram.com/" + this.username + "/").execute(client);
 		List<ThumbPostInfo> urls = new ArrayList<>();
 		ExpressionExecutor mediaExecutor = ee.executeForExecutor("data->user->edge_owner_to_timeline_media");

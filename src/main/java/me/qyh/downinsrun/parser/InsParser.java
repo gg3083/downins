@@ -161,7 +161,7 @@ public class InsParser {
 		String variables = String.format(STORIES_VARIABLES, sb.toString());
 
 		DowninsConfig config = Configure.get().getConfig();
-		ExpressionExecutor ee = GraphqlQuery.create().addParameter("query_hash", config.getCurrentStoryQueryHash())
+		ExpressionExecutor ee = GraphqlQuery.create().addParameter("query_hash", config.getStoryQueryHash())
 				.variables(variables).appid(X_IG_APP_ID).setReferer(URL_PREFIX).execute(client);
 
 		Map<String, List<Url>> map = new HashMap<>();

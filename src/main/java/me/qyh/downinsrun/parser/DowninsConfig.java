@@ -73,22 +73,10 @@ public class DowninsConfig {
 	}
 
 	public String getStoryQueryHash() {
-		return this.storyQueryHash;
-	}
-
-	public String getCurrentStoryQueryHash() {
-		if (storyQueryHash == null)
-			throw new LogicException("storyQueryHash未设置，请先设置");
 		return storyQueryHash;
 	}
 
 	public String getChannelQueryHash() {
-		return channelQueryHash;
-	}
-
-	public String getCurrentChannelQueryHash() {
-		if (channelQueryHash == null)
-			throw new LogicException("channelQueryHash未设置，请先设置");
 		return channelQueryHash;
 	}
 
@@ -101,12 +89,6 @@ public class DowninsConfig {
 		return userQueryHash;
 	}
 
-	public String getCurrentUserQueryHash() {
-		if (userQueryHash == null)
-			throw new LogicException("userQueryHash未设置，请先设置");
-		return userQueryHash;
-	}
-
 	public DowninsConfig setUserQueryHash(String userQueryHash) {
 		this.userQueryHash = userQueryHash;
 		return this;
@@ -116,24 +98,12 @@ public class DowninsConfig {
 		return storiesQueryHash;
 	}
 
-	public String getCurrentStoriesQueryHash() {
-		if (storiesQueryHash == null)
-			throw new LogicException("storiesQueryHash未设置，请先设置");
-		return storiesQueryHash;
-	}
-
 	public DowninsConfig setStoriesQueryHash(String storiesQueryHash) {
 		this.storiesQueryHash = storiesQueryHash;
 		return this;
 	}
 
 	public String getTagQueryHash() {
-		return tagQueryHash;
-	}
-
-	public String getCurrentTagQueryHash() {
-		if (tagQueryHash == null)
-			throw new LogicException("tagQueryHash未设置，请先设置");
 		return tagQueryHash;
 	}
 
@@ -153,7 +123,7 @@ public class DowninsConfig {
 		return dir;
 	}
 
-	public void store() {
+	public void store() throws LogicException {
 		try {
 			Configure.get().store(this);
 		} catch (IOException e) {
