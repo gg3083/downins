@@ -120,7 +120,7 @@ public final class TagParser {
 		String variables = String.format(TAG_VARIABLES, tag, first, after);
 		String md5 = Utils.doMd5(this.rhx_gis + ":" + variables);
 		return GraphqlQuery.create().addHeader("x-instagram-gis", md5).appid(InsParser.X_IG_APP_ID)
-				.queryHash(Configure.get().getConfig().getTagQueryHash()).variables(variables)
+				.queryHash(Configure.get().getConfig().getCurrentTagQueryHash()).variables(variables)
 				.setReferer(URL + "/" + tag + "/").execute(client);
 	}
 

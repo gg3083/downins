@@ -3,7 +3,6 @@ package me.qyh.downinsrun;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
-import java.io.IOException;
 
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
@@ -117,7 +116,7 @@ class SettingFrame extends JFrame {
 
 					@Override
 					public void run() {
-						DowninsConfig config = new DowninsConfig();
+						DowninsConfig config = Configure.get().getConfig();
 						config.setLocation(locationText.getText());
 						try {
 							config.setThreadNum(Integer.parseInt(threadNumText.getText()));
@@ -136,11 +135,11 @@ class SettingFrame extends JFrame {
 						}
 						config.setSid(sidArea.getText());
 						try {
-							Configure.get().store(config);
+							config.store();
 							JOptionPane.showMessageDialog(null, "保存成功");
 						} catch (LogicException e) {
 							JOptionPane.showMessageDialog(null, e.getMessage());
-						} catch (IOException e) {
+						} catch (Exception e) {
 							JOptionPane.showMessageDialog(null, "保存失败");
 						}
 					}
