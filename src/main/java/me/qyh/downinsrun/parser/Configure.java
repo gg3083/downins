@@ -95,19 +95,24 @@ public class Configure {
 			pros.remove(PROXY_PORT_KEY);
 		if (!isEmpty(config.getStoryQueryHash()))
 			pros.setProperty(STORY_QUERY_HASH, config.getStoryQueryHash());
-
+		else
+			pros.remove(STORY_QUERY_HASH);
 		if (!isEmpty(config.getChannelQueryHash()))
 			pros.setProperty(CHANNEL_QUERY_HASH, config.getChannelQueryHash());
-
+		else
+			pros.remove(CHANNEL_QUERY_HASH);
 		if (!isEmpty(config.getUserQueryHash()))
 			pros.setProperty(USER_QUERY_HASH, config.getUserQueryHash());
-
+		else
+			pros.remove(USER_QUERY_HASH);
 		if (!isEmpty(config.getStoriesQueryHash()))
 			pros.setProperty(STORIES_QUERY_HASH, config.getStoriesQueryHash());
-
+		else
+			pros.remove(STORIES_QUERY_HASH);
 		if (!isEmpty(config.getTagQueryHash()))
 			pros.setProperty(TAG_QUERY_HASH, config.getTagQueryHash());
-
+		else
+			pros.remove(TAG_QUERY_HASH);
 		try (OutputStream os = Files.newOutputStream(path)) {
 			pros.store(os, "");
 		}
@@ -129,15 +134,15 @@ public class Configure {
 		config.setLocation(
 				pros.getProperty(LOCATION_KEY, System.getProperty("user.home") + File.separator + "downins"));
 		config.setProxyAddr(pros.getProperty(PROXY_ADDR_KEY));
-		config.setStoryQueryHash(pros.getProperty(STORY_QUERY_HASH, "cda12de4f7fd3719c0569ce03589f4c4"));
+		config.setStoryQueryHash(pros.getProperty(STORY_QUERY_HASH));
 		String port = pros.getProperty(PROXY_PORT_KEY);
 		if (port != null) {
 			config.setProxyPort(Integer.parseInt(port));
 		}
-		config.setChannelQueryHash(pros.getProperty(CHANNEL_QUERY_HASH, "7a5416b9d9138c7a520a66f58a53132c"));
-		config.setStoriesQueryHash(pros.getProperty(STORIES_QUERY_HASH, "aec5501414615eca36a9acf075655b1e"));
-		config.setUserQueryHash(pros.getProperty(USER_QUERY_HASH, "f2405b236d85e8296cf30347c9f08c2a"));
-		config.setTagQueryHash(pros.getProperty(TAG_QUERY_HASH, "f92f56d47dc7a55b606908374b43a314"));
+		config.setChannelQueryHash(pros.getProperty(CHANNEL_QUERY_HASH));
+		config.setStoriesQueryHash(pros.getProperty(STORIES_QUERY_HASH));
+		config.setUserQueryHash(pros.getProperty(USER_QUERY_HASH));
+		config.setTagQueryHash(pros.getProperty(TAG_QUERY_HASH));
 		return config;
 	}
 

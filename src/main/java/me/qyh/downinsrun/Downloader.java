@@ -165,7 +165,7 @@ public class Downloader {
 		return false;
 	}
 
-	private static void processQueryHash() {
+	private static void processQueryHash() throws LogicException {
 		QueryHash hash = QueryHashQuery.get().getHash();
 		System.out.println("开始保存在配置文件中");
 		DowninsConfig config = Configure.get().getConfig();
@@ -174,6 +174,7 @@ public class Downloader {
 		config.setStoryQueryHash(hash.getStoryQueryHash());
 		config.setTagQueryHash(hash.getTagQueryHash());
 		config.setUserQueryHash(hash.getUserQueryHash());
+		config.store();
 		System.out.println("保存成功");
 		System.exit(0);
 	}
