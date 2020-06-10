@@ -146,7 +146,7 @@ public class Downloader {
 	}
 
 	private static final String[] VALID_KEYS = { "threadNum", "location", "proxyPort", "proxyAddr", "sid",
-			"storyQueryHash", "channelQueryHash", "userQueryHash", "storiesQueryHash", "tagQueryHash", "appid" };
+			"storyQueryHash", "channelQueryHash", "userQueryHash", "storiesQueryHash", "tagQueryHash", "username","password"};
 	private static final StringBuilder validKeysString = new StringBuilder();
 
 	static {
@@ -165,7 +165,7 @@ public class Downloader {
 		return false;
 	}
 
-	private static void processQueryHash() throws LogicException {
+	private static void processQueryHash() throws Exception {
 		QueryHash hash = QueryHashQuery.get().getHash();
 		System.out.println("开始保存在配置文件中");
 		DowninsConfig config = Configure.get().getConfig();
@@ -228,6 +228,14 @@ public class Downloader {
 						}
 					}
 				}
+
+				if (key.equalsIgnoreCase("username")) {
+					prev.setUsername(value);
+				}
+
+				if (key.equalsIgnoreCase("password")) {
+					prev.setPassword(value);
+				}
 			}
 			try {
 				Configure.get().store(prev);
@@ -238,11 +246,7 @@ public class Downloader {
 			}
 
 		} else {
-			SwingUtilities.invokeLater(new Runnable() {
-				public void run() {
-					new SettingFrame();
-				}
-			});
+			SwingUtilities.invokeLater(SettingFrame::new);
 		}
 	}
 
@@ -250,5 +254,4 @@ public class Downloader {
 		System.out.println(msg);
 		System.exit(-1);
 	}
-
 }

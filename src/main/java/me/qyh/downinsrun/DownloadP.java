@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import me.qyh.downinsrun.parser.ParseUtils;
 import org.apache.http.impl.client.CloseableHttpClient;
 
 import me.qyh.downinsrun.parser.Configure;
@@ -35,8 +36,9 @@ class DownloadP {
 
 	private DownloadProgressNotify notify;
 
-	public DownloadP(String code, Path dir) {
+	public DownloadP(String code, Path dir) throws Exception {
 		super();
+		ParseUtils.trySetSid(client);
 		this.code = code;
 		this.root = dir.resolve(code);
 		try {

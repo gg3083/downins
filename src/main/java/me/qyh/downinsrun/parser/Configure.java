@@ -24,6 +24,8 @@ public class Configure {
 	private static final String PROXY_ADDR_KEY = "downins.proxyAddr";
 	private static final String PROXY_PORT_KEY = "downins.proxyPort";
 	private static final String TIMEOUT_KEY = "downins.timeout";
+	private static final String USERNAME_KEY = "downins.username";
+	private static final String PASSWORD_KEY = "downins.password";
 
 	private static final String STORY_QUERY_HASH = "downins.story.queryHash";
 	private static final String CHANNEL_QUERY_HASH = "downins.channel.queryHash";
@@ -113,6 +115,15 @@ public class Configure {
 			pros.setProperty(TAG_QUERY_HASH, config.getTagQueryHash());
 		else
 			pros.remove(TAG_QUERY_HASH);
+		if (!isEmpty(config.getUsername()))
+			pros.setProperty(USERNAME_KEY, config.getUsername());
+		else
+			pros.remove(USERNAME_KEY);
+
+		if (!isEmpty(config.getPassword()))
+			pros.setProperty(PASSWORD_KEY, config.getPassword());
+		else
+			pros.remove(PASSWORD_KEY);
 		try (OutputStream os = Files.newOutputStream(path)) {
 			pros.store(os, "");
 		}
@@ -143,6 +154,8 @@ public class Configure {
 		config.setStoriesQueryHash(pros.getProperty(STORIES_QUERY_HASH));
 		config.setUserQueryHash(pros.getProperty(USER_QUERY_HASH));
 		config.setTagQueryHash(pros.getProperty(TAG_QUERY_HASH));
+		config.setUsername(pros.getProperty(USERNAME_KEY));
+		config.setPassword(pros.getProperty(PASSWORD_KEY));
 		return config;
 	}
 

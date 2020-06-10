@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import me.qyh.downinsrun.parser.ParseUtils;
 import org.apache.http.impl.client.CloseableHttpClient;
 
 import me.qyh.downinsrun.parser.Configure;
@@ -33,8 +34,9 @@ class DownloadS {
 	private final CloseableHttpClient client = Https.newHttpClient();
 	private final InsParser parser = new InsParser(false, client);
 
-	public DownloadS(String id, Path dir) {
+	public DownloadS(String id, Path dir) throws Exception {
 		super();
+		ParseUtils.trySetSid(client);
 		this.id = id;
 		this.root = dir.resolve(id);
 		try {

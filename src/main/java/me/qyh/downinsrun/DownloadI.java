@@ -14,17 +14,13 @@ class DownloadI extends DownloadP {
 
 	private final PercentWrapper wrapper = new PercentWrapper(0);
 
-	DownloadI(String code, Path dir) {
+	DownloadI(String code, Path dir) throws Exception {
 		super(code, dir);
 
-		super.setNotify(new DownloadProgressNotify() {
-
-			@Override
-			public void notify(Path dest, double percent) {
-				if (percent > wrapper.percent) {
-					wrapper.percent = percent;
-					System.out.println(percent + "%");
-				}
+		super.setNotify((dest, percent) -> {
+			if (percent > wrapper.percent) {
+				wrapper.percent = percent;
+				System.out.println(percent + "%");
 			}
 		});
 	}

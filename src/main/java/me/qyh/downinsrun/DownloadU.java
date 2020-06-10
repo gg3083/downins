@@ -20,16 +20,10 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import me.qyh.downinsrun.parser.*;
 import org.apache.http.impl.client.CloseableHttpClient;
 
-import me.qyh.downinsrun.parser.Configure;
-import me.qyh.downinsrun.parser.Https;
-import me.qyh.downinsrun.parser.InsParser;
 import me.qyh.downinsrun.parser.InsParser.Url;
-import me.qyh.downinsrun.parser.PagingResult;
-import me.qyh.downinsrun.parser.PostInfo;
-import me.qyh.downinsrun.parser.ThumbPostInfo;
-import me.qyh.downinsrun.parser.UserParser;
 
 /**
  * 用户所有帖子下载
@@ -61,8 +55,9 @@ class DownloadU {
 	private volatile boolean downloaded;
 	private ExecutorService moveExecutor;
 
-	public DownloadU(String user, Path dir, Integer maxInDir) {
+	public DownloadU(String user, Path dir, Integer maxInDir) throws Exception {
 		super();
+		ParseUtils.trySetSid(client);
 		this.user = user;
 		this.root = dir.resolve(user);
 		this.maxInDir = maxInDir;

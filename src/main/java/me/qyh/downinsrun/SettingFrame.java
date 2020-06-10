@@ -4,15 +4,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
-import javax.swing.WindowConstants;
+import javax.swing.*;
 
 import me.qyh.downinsrun.parser.Configure;
 import me.qyh.downinsrun.parser.DowninsConfig;
@@ -28,7 +20,9 @@ class SettingFrame extends JFrame {
 	private final JTextField threadNumText;
 	private final JTextField proxyPortText;
 	private final JTextField proxyAddrText;
-	private final JTextArea sidArea;
+	private final JTextField usernameText;
+	private final JPasswordField passwordText;
+	private final JTextField sidText;
 
 	public SettingFrame() {
 
@@ -96,13 +90,33 @@ class SettingFrame extends JFrame {
 		proxyPortText.setBounds(10, 290, 370, 30);
 		add(proxyPortText);
 
+
+		JLabel usernameLabel = new JLabel("用户名");
+		usernameLabel.setBounds(10, 330, 300, 30);
+		add(usernameLabel);
+
+		String username = config.getUsername() == null ? "" : String.valueOf(config.getUsername());
+		usernameText = new JTextField(username);
+		usernameText.setBounds(10, 370, 370, 30);
+		add(usernameText);
+
+
+		JLabel passwordLabel = new JLabel("密码");
+		passwordLabel.setBounds(10, 410, 300, 30);
+		add(passwordLabel);
+
+		String password = config.getPassword() == null ? "" : String.valueOf(config.getPassword());
+		passwordText = new JPasswordField(password);
+		passwordText.setBounds(10, 450, 370, 30);
+		add(passwordText);
+
 		JLabel sidLabel = new JLabel("sessionid");
-		sidLabel.setBounds(10, 330, 300, 30);
+		sidLabel.setBounds(10, 490, 300, 30);
 		add(sidLabel);
 		String sid = config.getSid() == null ? "" : config.getSid();
-		sidArea = new JTextArea(sid);
-		sidArea.setBounds(10, 370, 370, 180);
-		add(sidArea);
+		sidText = new JTextField(sid);
+		sidText.setBounds(10, 530, 370, 30);
+		add(sidText);
 
 		JButton saveBtn = new JButton("保存");
 		saveBtn.setBounds(280, 570, 100, 30);
@@ -133,7 +147,9 @@ class SettingFrame extends JFrame {
 								return;
 							}
 						}
-						config.setSid(sidArea.getText());
+						config.setSid(sidText.getText());
+						config.setUsername(usernameText.getText());
+						config.setPassword(new String(passwordText.getPassword()));
 						try {
 							config.store();
 							JOptionPane.showMessageDialog(null, "保存成功");
@@ -151,5 +167,4 @@ class SettingFrame extends JFrame {
 
 		setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 	}
-
 }

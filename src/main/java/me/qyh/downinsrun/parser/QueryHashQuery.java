@@ -1,22 +1,21 @@
 package me.qyh.downinsrun.parser;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import me.qyh.downinsrun.Utils;
+import me.qyh.downinsrun.Utils.ExpressionExecutor;
+import me.qyh.downinsrun.parser.Https.InvalidStateCodeException;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import me.qyh.downinsrun.Utils;
-import me.qyh.downinsrun.Utils.ExpressionExecutor;
-import me.qyh.downinsrun.parser.Https.InvalidStateCodeException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class QueryHashQuery {
 
@@ -40,19 +39,21 @@ public class QueryHashQuery {
 
 	private static final String URL_PREFIX = "https://www.instagram.com";
 
-	private QueryHashQuery() {
-		super();
+	private final String token;
+
+	public QueryHashQuery() throws IOException{
+		System.out.println("开始获取shared_data");
+		this.token = ParseUtils.getSharedData(client).execute("config->csrf_token").get();
+		System.out.println("成功获取shared_data");
 	}
 
-	public static QueryHashQuery INS = new QueryHashQuery();
-
-	public static QueryHashQuery get() {
-		return INS;
+	public static QueryHashQuery get() throws  IOException {
+		return new QueryHashQuery();
 	}
 
-	public QueryHash getHash() {
+	public QueryHash getHash() throws Exception {
 		QueryHash hash = new QueryHash();
-
+		ParseUtils.trySetSid(client);
 		System.out.println("开始获取query_hash");
 		System.out.println("开始连接地址:" + USER_URL);
 		Document doc = Jsoup.parse(quietlyGetSource(USER_URL));
@@ -76,7 +77,6 @@ public class QueryHashQuery {
 		String content = quietlyGetSource(TAG_URL);
 		System.out.println("获取地址内容成功");
 		Document doc = Jsoup.parse(content);
-		String token = getCsrfToken(doc);
 		Elements eles = doc.select("script[src]");
 		String url = null;
 		for (Element ele : eles) {
@@ -118,7 +118,6 @@ public class QueryHashQuery {
 	}
 
 	private String getUserQueryHash(Document doc) {
-		String token = getCsrfToken(doc);
 		Elements eles = doc.select("script[src]");
 
 		String userHashJsUrl = null;
@@ -315,17 +314,6 @@ public class QueryHashQuery {
 
 	}
 
-	private String getCsrfToken(Document doc) {
-		Optional<String> sdop = InsParser.getSharedData(doc);
-		if (sdop.isPresent()) {
-			String json = sdop.get();
-			ExpressionExecutor ee = Utils.readJson(json);
-			return ee.execute("config->csrf_token").get();
-		} else {
-			throw new RuntimeException("获取csrf_token失败");
-		}
-	}
-
 	private String quietlyGetSource(String url) {
 		try {
 			return Https.toString(client, url.startsWith(URL_PREFIX) ? url : URL_PREFIX + url);
@@ -333,6 +321,7 @@ public class QueryHashQuery {
 			throw new RuntimeException(e);
 		}
 	}
+
 
 	private void sleep() {
 		try {
@@ -397,4 +386,9 @@ public class QueryHashQuery {
 					+ channelQueryHash + "]";
 		}
 	}
+
+	public static void main(String [] args) throws Exception{
+		QueryHashQuery.get().getHash();
+	}
+
 }

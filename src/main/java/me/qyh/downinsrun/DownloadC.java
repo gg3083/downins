@@ -21,6 +21,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import me.qyh.downinsrun.parser.*;
 import org.apache.http.impl.client.CloseableHttpClient;
 
 import com.google.gson.JsonArray;
@@ -28,13 +29,7 @@ import com.google.gson.JsonObject;
 
 import me.qyh.downinsrun.Utils.ExpressionExecutor;
 import me.qyh.downinsrun.Utils.ExpressionExecutors;
-import me.qyh.downinsrun.parser.Configure;
-import me.qyh.downinsrun.parser.Https;
-import me.qyh.downinsrun.parser.IGTVItem;
-import me.qyh.downinsrun.parser.InsParser;
 import me.qyh.downinsrun.parser.InsParser.Url;
-import me.qyh.downinsrun.parser.PagingResult;
-import me.qyh.downinsrun.parser.UserParser;
 
 /**
  * channel下载
@@ -67,8 +62,9 @@ class DownloadC {
 	private volatile boolean downloaded;
 	private ExecutorService moveExecutor;
 
-	public DownloadC(String username, Path dir, Integer maxInDir) {
+	public DownloadC(String username, Path dir, Integer maxInDir) throws Exception {
 		super();
+		ParseUtils.trySetSid(client);
 		this.username = username;
 		this.root = dir.resolve(username + "_channel");
 		this.maxInDir = maxInDir;

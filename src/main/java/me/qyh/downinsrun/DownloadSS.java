@@ -11,14 +11,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import me.qyh.downinsrun.parser.*;
 import org.apache.http.impl.client.CloseableHttpClient;
 
-import me.qyh.downinsrun.parser.Configure;
-import me.qyh.downinsrun.parser.Https;
-import me.qyh.downinsrun.parser.InsParser;
 import me.qyh.downinsrun.parser.InsParser.Url;
-import me.qyh.downinsrun.parser.Story;
-import me.qyh.downinsrun.parser.UserParser;
 
 /**
  * 用户所有story 下载
@@ -37,8 +33,9 @@ class DownloadSS {
 	private final Path destDir;
 	private final Path tempDir;
 
-	public DownloadSS(String user, Path dir) {
+	public DownloadSS(String user, Path dir) throws Exception {
 		super();
+		ParseUtils.trySetSid(client);
 		this.user = user;
 		this.root = dir.resolve(user + "_story");
 		try {

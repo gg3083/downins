@@ -21,6 +21,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.jsoup.UncheckedIOException;
 
@@ -29,22 +30,21 @@ import me.qyh.downinsrun.DowninsHttpRoutePlanner;
 
 public class Https {
 
-	private static final ResponseHandler<String> stringHandler = new ResponseHandler<String>() {
-
-		@Override
-		public String handleResponse(HttpResponse response) throws ClientProtocolException, IOException {
-			HttpEntity entity = response.getEntity();
-			if (entity == null) {
-				throw new IllegalStateException("没有响应内容");
-			}
-			String content = EntityUtils.toString(entity);
-			int statusCode = response.getStatusLine().getStatusCode();
-			if (statusCode >= 300) {
-				throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode, content);
-			}
-			return content;
+	private static final ResponseHandler<String> stringHandler = response -> {
+		HttpEntity entity = response.getEntity();
+		if (entity == null) {
+			throw new IllegalStateException("没有响应内容");
 		}
+		String content = EntityUtils.toString(entity);
+		int statusCode = response.getStatusLine().getStatusCode();
+		if (statusCode >= 300) {
+			throw new InvalidStateCodeException(statusCode, "错误的状态码:" + statusCode, content);
+		}
+		return content;
 	};
+
+
+	private static final ResponseHandler<Void> emptyHandler = httpResponse -> null;
 
 	public static CloseableHttpClient newHttpClient() {
 		CloseableHttpClient client = HttpClients.custom()
@@ -59,27 +59,45 @@ public class Https {
 
 	public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36";
 
+	public static String toString(CloseableHttpClient client, HttpRequestBase req, HttpContext context) throws InvalidStateCodeException {
+		return toString(client, req, 30, 0,context);
+	}
+
+	public static void connect(CloseableHttpClient client, HttpRequestBase req, HttpContext context) throws IOException{
+		try {
+			req.addHeader("user-agent", USER_AGENT);
+			if (context != null) {
+				client.execute(req,emptyHandler,context);
+			} else {
+				client.execute(req, emptyHandler);
+			}
+		} finally {
+			req.releaseConnection();
+		}
+	}
+
 	public static String toString(CloseableHttpClient client, HttpRequestBase req) throws InvalidStateCodeException {
-		return toString(client, req, 30, 0);
+		return toString(client, req, 30, 0,null);
 	}
 
 	public static String toString(CloseableHttpClient client, String url) throws InvalidStateCodeException {
-		HttpGet get = new HttpGet(url);
-		get.addHeader("user-agent", USER_AGENT);
-		return toString(client, get, 30, 0);
+		return toString(client, new HttpGet(url), 30, 0,null);
 	}
 
-	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec, int times)
+	private static String toString(CloseableHttpClient client, HttpRequestBase req, int sec, int times,HttpContext context)
 			throws InvalidStateCodeException {
 		try {
 			req.addHeader("user-agent", USER_AGENT);
+			if (context != null) {
+				return client.execute(req,stringHandler,context);
+			}
 			return client.execute(req, stringHandler);
 		} catch (InvalidStateCodeException e) {
 			if (e.getCode() == 429) {
 				try {
 					System.out.println("服务:" + req.getURI() + "请求失败：客户端请求太多，" + sec + "s后再次尝试");
 					Thread.sleep(sec * 1000);
-					return toString(client, req, sec + 30, times);
+					return toString(client, req, sec + 30, times,context);
 				} catch (InterruptedException e1) {
 					Thread.currentThread().interrupt();
 					throw new RuntimeException(e1);
@@ -90,7 +108,7 @@ public class Https {
 			if (times == 3) {
 				throw new UncheckedIOException(e);
 			}
-			return toString(client, req, sec, times + 1);
+			return toString(client, req, sec, times + 1,context);
 		} finally {
 			req.releaseConnection();
 		}
