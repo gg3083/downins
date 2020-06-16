@@ -9,7 +9,7 @@ public class PostInfo {
 	private final String type;
 	private final String shortcode;
 	private final String id;
-	private final List<Url> urls = new ArrayList<>();
+	private List<Url> urls;
 
 	public PostInfo(String type, String shortcode, String id) {
 		super();
@@ -18,8 +18,16 @@ public class PostInfo {
 		this.id = id;
 	}
 
-	public void addUrl(Url url) {
-		urls.add(url);
+	public PostInfo addUrl(Url url){
+		if(this.urls == null){
+			this.urls = new ArrayList<>();
+		}
+		this.urls.add(url);
+		return this;
+	}
+
+	public void setUrls(List<Url> urls){
+		this.urls = urls;
 	}
 
 	public List<Url> getUrls() {

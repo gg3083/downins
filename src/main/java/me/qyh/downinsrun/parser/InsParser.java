@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.google.gson.JsonElement;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -27,7 +28,6 @@ public class InsParser {
 	public static final String GRAPH_IMAGE = "GraphImage";
 	public static final String GRAPH_VIDEO = "GraphVideo";
 	public static final String GRAPH_SIDECAR = "GraphSidecar";
-	public static final String STORY_URL_PREFIX = "https://www.instagram.com/stories/highlights/%s";
 
 	public static final String X_IG_APP_ID = "1217981644879628";
 
@@ -50,7 +50,7 @@ public class InsParser {
 	}
 
 	public PostInfo parsePost(String p) throws LogicException {
-		String url = POST_URL_PREFIX + Utils.cleanPath(p) + "/";
+		String url = POST_URL_PREFIX + Utils.cleanPath(p) + "/?__a=1";
 		if (!quiet) {
 			System.out.println("开始连接地址:" + url);
 		}
@@ -58,73 +58,31 @@ public class InsParser {
 		try {
 			str = Https.toString(client, url);
 		} catch (InvalidStateCodeException e) {
-			if (e.getCode() == 404) {
-				throw new LogicException("帖子:" + p + "不存在");
-			}
 			throw new RuntimeException("请求：" + url + "返回错误的状态码：" + e.getCode());
 		}
-
-		Document doc = Jsoup.parse(str);
-		if (!quiet) {
-			System.out.println("获取地址:" + url + "内容成功");
+		ExpressionExecutor ee = Utils.readJson(str);
+		if(ee.isNull()) {
+			throw new LogicException("解析帖子失败，或者需要关注才能下载");
 		}
-		Optional<String> opsd = getSharedData(doc);
-		if (!opsd.isPresent()) {
-			throw new LogicException("解析帖子失败");
-		}
-		List<Url> urls = new ArrayList<>();
-		String json = opsd.get();
-
-		ExpressionExecutor ee = Utils.readJson(json);
-		ExpressionExecutor user = ee.executeForExecutor("entry_data->ProfilePage[0]->graphql->user");
-		Optional<String> opuid = user.execute("id");
-		if (opuid.isPresent()) {
-			String userId = opuid.get();
-			if (user.execute("is_private").map(Boolean::parseBoolean).orElse(false)) {
-				if (!user.execute("followed_by_viewer").map(Boolean::parseBoolean).orElse(false)) {
-					ExpressionExecutor viewer = ee.executeForExecutor("config->viewer");
-					if (viewer.isNull()) {
-						throw new LogicException("需要设置sessionid才能下载该帖子");
-					} else {
-						String id = viewer.execute("id").get();
-						if (!userId.equals(id)) {
-							throw new LogicException("需要关注该账户才能下载TA的帖子");
-						}
-					}
-				}
-			}
-		}
-
-		ExpressionExecutor graphql = ee.executeForExecutor("entry_data->PostPage[0]->graphql->shortcode_media");
+		ExpressionExecutor graphql = ee.executeForExecutor("graphql->shortcode_media");
 
 		String typename = graphql.execute("__typename").get();
 		String id = graphql.execute("id").get();
 		String shortcode = graphql.execute("shortcode").get();
 
+		List<Url> urls = new ArrayList<>();
 		ExpressionExecutors children = graphql.executeForExecutors("edge_sidecar_to_children->edges");
 		if (!children.isNull()) {
 			for (ExpressionExecutor exe : children) {
 				ExpressionExecutor node = exe.executeForExecutor("node");
-				String displayUrl = node.execute("display_url").get();
-				if (node.execute("is_video").map(Boolean::parseBoolean).get()) {
-					urls.add(new VideoUrl(node.execute("video_url").get(), new Url(GRAPH_IMAGE, displayUrl)));
-				} else {
-					urls.add(new Url(GRAPH_IMAGE, displayUrl));
-				}
+				urls.add(parseMedia(node));
 			}
 		} else {
-			String displayUrl = graphql.execute("display_url").get();
-			if (graphql.execute("is_video").map(Boolean::parseBoolean).get()) {
-				urls.add(new VideoUrl(graphql.execute("video_url").get(), new Url(GRAPH_IMAGE, displayUrl)));
-			} else {
-				urls.add(new Url(GRAPH_IMAGE, displayUrl));
-			}
+			urls.add(parseMedia(graphql));
 		}
 		urls.removeIf(_url -> _url.value == null || _url.value.trim().isEmpty());
 		PostInfo pi = new PostInfo(typename, shortcode, id);
-		for (Url _url : urls) {
-			pi.addUrl(_url);
-		}
+		pi.setUrls(urls);
 		return pi;
 	}
 
@@ -374,20 +332,12 @@ public class InsParser {
 		return new UserParser(quiet, client, username);
 	}
 
-	public static String toShortcode(long id) {
-		String postId = "";
-		try {
-			String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
-			while (id > 0) {
-				long remainder = (id % 64);
-				id = (id - remainder) / 64;
-				postId = alphabet.charAt((int) remainder) + postId;
-			}
-		} catch (Exception e) {
-			throw new RuntimeException(e.getMessage(), e);
+	private Url parseMedia(ExpressionExecutor ex){
+		String displayUrl = ex.execute("display_url").get();
+		if (ex.execute("is_video").map(Boolean::parseBoolean).get()) {
+			return new VideoUrl(ex.execute("video_url").get(), new Url(GRAPH_IMAGE, displayUrl));
+		} else {
+			return new Url(GRAPH_IMAGE, displayUrl);
 		}
-		return postId;
 	}
-
 }

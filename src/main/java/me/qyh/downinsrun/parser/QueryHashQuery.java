@@ -148,7 +148,7 @@ public class QueryHashQuery {
 				System.out.println("开始尝试query_hash:" + queryId);
 				ExpressionExecutor ee = GraphqlQuery.create().variables(USER_VARIABLES).appid(APP_ID).queryHash(queryId)
 						.addHeader("x-instagram-gis", md5).execute(client);
-				boolean valid = !ee.execute("data->user->edge_owner_to_timeline_media").isEmpty();
+				boolean valid = ee.execute("data->user->edge_owner_to_timeline_media").isPresent();
 				if (!valid)
 					continue;
 				System.out.println("获取user query_hash成功:" + queryId);
@@ -188,7 +188,7 @@ public class QueryHashQuery {
 			try {
 				ExpressionExecutor ee = GraphqlQuery.create().variables(CHANNEL_VARIABLES).appid(APP_ID)
 						.queryHash(queryId).execute(client);
-				if (ee.execute("data->user->edge_felix_video_timeline").isEmpty())
+				if (!ee.execute("data->user->edge_felix_video_timeline").isPresent())
 					continue;
 				System.out.println("获取channel query_hash成功:" + queryId);
 				return queryId;
@@ -231,7 +231,7 @@ public class QueryHashQuery {
 			try {
 				ExpressionExecutor ee = GraphqlQuery.create().appid(APP_ID).queryHash(queryId)
 						.variables(STORIES_VARIABLES).execute(client);
-				if (ee.execute("data->user->edge_highlight_reels").isEmpty())
+				if (!ee.execute("data->user->edge_highlight_reels").isPresent())
 					continue;
 				System.out.println("获取stories query_hash成功:" + queryId);
 				return queryId;
@@ -279,7 +279,7 @@ public class QueryHashQuery {
 			try {
 				ExpressionExecutor storyee = GraphqlQuery.create().appid(APP_ID).queryHash(queryId).variables(variables)
 						.execute(client);
-				if (storyee.execute("data->reels_media").isEmpty()) {
+				if (!storyee.execute("data->reels_media").isPresent()) {
 					continue;
 				}
 				System.out.println("获取story query_hash成功:" + queryId);

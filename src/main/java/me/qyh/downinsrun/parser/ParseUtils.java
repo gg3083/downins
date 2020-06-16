@@ -1,9 +1,9 @@
 package me.qyh.downinsrun.parser;
 
-import me.qyh.downinsrun.LogicException;
 import me.qyh.downinsrun.Utils;
 import me.qyh.downinsrun.encrypt.SealedBoxUtility;
 import org.apache.http.NameValuePair;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
@@ -11,17 +11,17 @@ import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.cookie.Cookie;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.protocol.HttpContext;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.Console;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.List;
+import java.io.UnsupportedEncodingException;
+import java.util.*;
 
 public class ParseUtils {
 
@@ -39,11 +39,14 @@ public class ParseUtils {
     }
 
     public static void trySetSid(CloseableHttpClient client,boolean exit) throws Exception {
+        System.out.println("判断是否需要重新登录");
         Utils.ExpressionExecutor executor = getSharedData(client);
         if(!executor.executeForExecutor("config->viewer").isNull()) {
+            System.out.println("不需要重新登录");
             return;
         }
 
+        System.out.println("需要重新登录");
         DowninsConfig config = Configure.get().getConfig();
         String username = config.getUsername();
         String password = config.getPassword();
@@ -55,9 +58,9 @@ public class ParseUtils {
             return ;
         }
 
-        String csrfToken = executor.execute("config->csrf_token").orElseThrow();
-        int key = Integer.parseInt(executor.execute("encryption->key_id").orElseThrow());
-        String publicKey = executor.execute("encryption->public_key").orElseThrow();
+        String csrfToken = executor.execute("config->csrf_token").get();
+        int key = Integer.parseInt(executor.execute("encryption->key_id").get());
+        String publicKey = executor.execute("encryption->public_key").get();
 
         HttpClientContext context = new HttpClientContext();
         Https.connect(client,new HttpGet("https://www.instagram.com"),context);
@@ -69,10 +72,23 @@ public class ParseUtils {
         pairs.add(new BasicNameValuePair("enc_password","#PWD_INSTAGRAM_BROWSER:10:"+time+":"+encrypt(key,publicKey,password,time)));
         UrlEncodedFormEntity entity = new UrlEncodedFormEntity(pairs);
         post.setEntity(entity);
-        String content = Https.toString(client,post,context);
+        String content = null;
+        try{
+         content = Https.toString(client,post,context);
+        }catch (Https.InvalidStateCodeException ex){
+            if(ex.getContent().contains("\"two_factor_required\": true")) {
+                twoFactorLogin(username, ex.getContent(),csrfToken,client,context,exit);
+                return;
+            }
+            System.out.println("登录失败:"+ex.getContent());
+            if(exit) {
+                System.exit(-1);
+            }
+        }
         if(content.contains("\"authenticated\": true")) {
-            String sid = context.getCookieStore().getCookies().stream().filter(c->"sessionid".equals(c.getName())).map(Cookie::getValue).findAny().orElseThrow();
+            String sid = context.getCookieStore().getCookies().stream().filter(c->"sessionid".equals(c.getName())).map(Cookie::getValue).findAny().get();
             Configure.get().getConfig().setSid(sid).store();
+            System.out.println("登录成功");
         } else {
             System.out.println("登录失败");
             if(exit) {
@@ -81,8 +97,41 @@ public class ParseUtils {
         }
     }
 
-    private interface SetFail{
-        void onFail();
+    private static void twoFactorLogin(String username, String content, String csrfToken, CloseableHttpClient client, HttpClientContext context,boolean exit) throws Exception {
+        Scanner scan = new Scanner(System.in);
+        System.out.println("请输入二次认证码");
+        String code = scan.nextLine();
+        System.out.println("获取二次认证码："+code+"，开始认证");
+        Utils.ExpressionExecutor ee = Utils.readJson(content);
+        String identifier = ee.execute("two_factor_info->two_factor_identifier").get();
+        HttpPost post = new HttpPost("https://www.instagram.com/accounts/login/ajax/two_factor/");
+        post.addHeader("X-CSRFToken",csrfToken);
+        List<NameValuePair> pairs = new ArrayList<>();
+        pairs.add(new BasicNameValuePair("username",username));
+        pairs.add(new BasicNameValuePair("identifier",identifier));
+        pairs.add(new BasicNameValuePair("queryParams","{\"next\":\"/\"}"));
+        pairs.add(new BasicNameValuePair("verificationCode",code));
+        UrlEncodedFormEntity entity = new UrlEncodedFormEntity(pairs);
+        post.setEntity(entity);
+        try{
+            Https.toString(client,post,context);
+            String sid = context.getCookieStore().getCookies().stream().filter(c->"sessionid".equals(c.getName())).map(Cookie::getValue).findAny().get();
+            Configure.get().getConfig().setSid(sid).store();
+            System.out.println("登录成功");
+        }catch (Https.InvalidStateCodeException e){
+            Utils.ExpressionExecutor ee2 = Utils.readJson(e.getContent());
+            String errorType = ee2.execute("error_type").orElse(null);
+            if("sms_code_validation_code_invalid".equals(errorType)){
+                twoFactorLogin(username,content,csrfToken,client,context,exit);
+            }  else if("invalid_identifier".equals(errorType)) {
+                trySetSid(client,exit);
+            } else {
+                System.out.println("登录失败");
+                if(exit) {
+                    System.exit(-1);
+                }
+            }
+        }
     }
 
     private static String encrypt(int key, String pkey, String password, String time) throws Exception{

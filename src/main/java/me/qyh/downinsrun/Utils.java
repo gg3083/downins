@@ -125,9 +125,7 @@ public class Utils {
 	 */
 	public static ExpressionExecutors readJsonForExecutors(String json) {
 		try {
-			JsonParser jp = new JsonParser();
-			JsonElement je = jp.parse(json);
-			return new ExpressionExecutors(toJsonArray(je));
+			return new ExpressionExecutors(toJsonArray(JsonParser.parseString(json)));
 		} catch (Exception e) {
 			return new ExpressionExecutors(new JsonArray());
 		}
@@ -480,8 +478,7 @@ public class Utils {
 	public static ExpressionExecutor readJson(String json) {
 		JsonElement je;
 		try {
-			JsonParser jp = new JsonParser();
-			je = jp.parse(json);
+			je = JsonParser.parseString(json);
 		} catch (Exception e) {
 			je = JsonNull.INSTANCE;
 		}

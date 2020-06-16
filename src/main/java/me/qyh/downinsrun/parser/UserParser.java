@@ -202,10 +202,4 @@ public final class UserParser {
 		}
 		return new PagingResult<>(urls, endCursor, hasNextPage, count);
 	}
-
-	public static void main(String [] args){
-		InsParser ip = new InsParser(true,Https.newHttpClient());
-		UserParser up = ip.newUserParser("qyhqym",false);
-		up.paging("",10);
-	}
 }
