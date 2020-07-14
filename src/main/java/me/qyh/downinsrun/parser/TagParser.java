@@ -148,4 +148,9 @@ public final class TagParser {
         }
         return new PagingResult<>(items, endCursor, hasNextPage, count);
     }
+
+    public static void main(String [] args){
+       InsParser parser  = new InsParser(false, Https.newHttpClient());
+       parser.parseStory("3246236");
+    }
 }

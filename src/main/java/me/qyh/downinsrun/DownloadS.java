@@ -31,12 +31,14 @@ class DownloadS {
     private final Path tempDir;
     private final CloseableHttpClient client = Https.newHttpClient();
     private final InsParser parser = new InsParser(false, client);
+    private final boolean isUser;
 
     public DownloadS(String id, Path dir) throws Exception {
         super();
         ParseUtils.trySetSid(client);
         this.id = id;
-        this.root = dir.resolve(id);
+        this.isUser = isUser(id);
+        this.root = isUser ? dir.resolve(id + "_last_story") : dir.resolve(id);
         try {
             Files.createDirectories(root);
         } catch (Throwable e) {
@@ -68,12 +70,15 @@ class DownloadS {
         List<Url> urls = new ArrayList<>();
         boolean error = false;
         try {
-            urls = parser.parseStory(id).values().stream().flatMap(s -> s.stream()).collect(Collectors.toList());
+            if (isUser) {
+                urls = parser.parseLastUserStory(id);
+            } else {
+                urls = parser.parseStory(id).values().stream().flatMap(s -> s.stream()).collect(Collectors.toList());
+            }
         } catch (LogicException e) {
             System.out.println(e.getMessage());
             System.exit(-1);
         } catch (Throwable e) {
-
             error = true;
         }
         if (!error) {
@@ -125,5 +130,14 @@ class DownloadS {
         }
         Utils.deleteDir(tempDir);
         System.out.println("下载story" + id + "完成，文件存储目录:" + root.toString());
+    }
+
+    private boolean isUser(String id) {
+        try {
+            Long.parseLong(id);
+        } catch (NumberFormatException e) {
+            return true;
+        }
+        return false;
     }
 }

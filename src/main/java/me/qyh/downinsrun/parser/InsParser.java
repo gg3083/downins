@@ -6,11 +6,13 @@ import me.qyh.downinsrun.Utils.ExpressionExecutor;
 import me.qyh.downinsrun.Utils.ExpressionExecutors;
 import me.qyh.downinsrun.parser.Https.InvalidStateCodeException;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class InsParser {
 
@@ -19,10 +21,13 @@ public class InsParser {
     public static final String GRAPH_IMAGE = "GraphImage";
     public static final String GRAPH_VIDEO = "GraphVideo";
     public static final String GRAPH_SIDECAR = "GraphSidecar";
+    public static final String USER_LAST_STORIES_PREFIX = "https://www.instagram.com/stories/";
 
     public static final String X_IG_APP_ID = "1217981644879628";
 
     private static final String STORIES_VARIABLES = "{\"reel_ids\":[],\"tag_names\":[],\"location_ids\":[],\"highlight_reel_ids\":[%s],\"precomposed_overlay\":false,\"show_story_viewer_list\":true,\"story_viewer_fetch_count\":50,\"story_viewer_cursor\":\"\",\"stories_video_dash_manifest\":false}";
+
+    private static final String USER_STORIES_VARIABLES = "{\"reel_ids\":[%s],\"tag_names\":[],\"location_ids\":[],\"highlight_reel_ids\":[],\"precomposed_overlay\":false,\"show_story_viewer_list\":true,\"story_viewer_fetch_count\":50,\"story_viewer_cursor\":\"\",\"stories_video_dash_manifest\":false}";
 
     private final boolean quiet;
     private final CloseableHttpClient client;
@@ -77,6 +82,24 @@ public class InsParser {
         return pi;
     }
 
+    public List<Url> parseLastUserStory(String user) throws LogicException {
+        String url = USER_LAST_STORIES_PREFIX + user;
+        String content;
+        try {
+            content = Https.toString(client, url);
+        } catch (InvalidStateCodeException e) {
+            throw new RuntimeException("请求：" + url + "返回错误的状态码：" + e.getCode());
+        }
+        Document document = Jsoup.parse(content);
+        Optional<String> opData = getSharedData(document);
+        if (opData.isEmpty()) {
+            throw new LogicException("获取页面:" + url + "数据失败");
+        }
+        ExpressionExecutor ee = Utils.readJson(opData.get());
+        String userId = ee.execute("entry_data->StoriesPage[0]->user->id").orElseThrow(() -> new LogicException("获取用户ID失败"));
+        return queryStory(Arrays.asList(userId), false).values().stream().flatMap(List::stream).collect(Collectors.toList());
+    }
+
     public Map<String, List<Url>> parseStory(String... ids) throws LogicException {
         if (ids == null || ids.length == 0) {
             return Collections.emptyMap();
@@ -87,7 +110,7 @@ public class InsParser {
             // 每次查询5个
             List<List<String>> chopped = Utils.chopped(Arrays.asList(ids), 5);
             for (List<String> chop : chopped) {
-                map.putAll(this.queryStory(chop));
+                map.putAll(this.queryStory(chop, true));
 
                 try {
                     Thread.sleep(1000);
@@ -100,14 +123,16 @@ public class InsParser {
         }
     }
 
-    private Map<String, List<Url>> queryStory(List<String> chopped) throws LogicException {
+    private Map<String, List<Url>> queryStory(List<String> ids, boolean highlight) throws LogicException {
         StringBuilder sb = new StringBuilder();
-        for (String id : chopped) {
+        for (String id : ids) {
             sb.append("\"").append(id).append("\"");
             sb.append(",");
         }
         sb.deleteCharAt(sb.length() - 1);
-        String variables = String.format(STORIES_VARIABLES, sb.toString());
+
+        String variables = highlight ? String.format(STORIES_VARIABLES, sb.toString())
+                : String.format(USER_STORIES_VARIABLES, sb.toString());
 
         DowninsConfig config = Configure.get().getConfig();
         ExpressionExecutor ee = GraphqlQuery.create().addParameter("query_hash", config.getCurrentStoryQueryHash())
@@ -330,5 +355,10 @@ public class InsParser {
         } else {
             return new Url(GRAPH_IMAGE, displayUrl);
         }
+    }
+
+    public static void main(String[] args) {
+        InsParser ip = new InsParser(false, Https.newHttpClient());
+        ip.parseStory("2353135622461839786");
     }
 }
